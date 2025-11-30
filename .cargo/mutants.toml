@@ -1,0 +1,10 @@
+# Cargo mutants configuration
+
+# These mutants are equivalent - changing strict inequality to non-strict
+# inequality produces the same observable behavior when values are equal
+exclude_re = [
+    "src/lib.rs:405:22.*>=",  # replace > with >= - equivalent when x1 == x2
+    "src/lib.rs:404:22.*>=",  # replace > with >= - equivalent when y1 == y2
+    "src/lib.rs:409:22.*<=",  # replace < with <= - equivalent when x1 == x2
+    "src/lib.rs:410:22.*<=",  # replace < with <= - equivalent when y1 == y2
+]

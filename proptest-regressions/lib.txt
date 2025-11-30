@@ -1,0 +1,7 @@
+# Seeds for failure cases proptest has generated in the past. It is
+# automatically read and these particular cases re-run before any
+# novel cases are generated.
+#
+# It is recommended to check this file in to source control so that
+# everyone who runs the test benefits from these saved cases.
+cc 547055fd8dbdebe2e4e4a3444bf222ee4570a658acfe1d93fec83466dd4544d9 # shrinks to h = Hotspot { top_right: Coordinate { x: 6553, y: 0 }, lower_left: Coordinate { x: 0, y: 0 }, _repr: PhantomData<hotspots::repr::PixelRepr> }, dims = ImageDimensions { height: 1, width: 6554 }

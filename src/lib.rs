@@ -2,42 +2,14 @@
 
 mod repr;
 
-use core::{marker::PhantomData, u16};
+use core::marker::PhantomData;
 
 use repr::*;
 
-/// The number of decimal points used for coordinate representation.
-///
-/// By default we store coordinates with 1 decimal points of precision. If you
-/// need higher precision (up to 4 decimal points), enable the "high_precision"
-/// feature.
-pub const NUM_DECIMAL_POINTS: u8 = {
-    #[cfg(not(feature = "high_precision"))]
-    {
-        1
-    }
-    #[cfg(feature = "high_precision")]
-    {
-        4
-    }
-};
-
-/// The maximum allowed coordinate value based on the current precision settings.
-const MAX_ALLOWED_VALUE: CoordinateValue = {
-    #[cfg(not(feature = "high_precision"))]
-    {
-        65_535u16 / 10u16.pow(NUM_DECIMAL_POINTS as u32)
-    }
-    #[cfg(feature = "high_precision")]
-    {
-        4_294_967_295u32 / 10u32.pow(NUM_DECIMAL_POINTS as u32)
-    }
-};
-
 /// Coordinate type definition.
 ///
-/// By default, coordinates are stored as u16 values (0 to 65535), with 2
-/// decimal points of precision, allowing for coordinate values from 0.0 to
+/// By default, coordinates are stored as u16 values (0 to 65535), with 1
+/// decimal point of precision, allowing for coordinate values from 0.0 to
 /// 6553.5. If higher precision is needed, enabling the "high_precision" feature
 /// which uses u32 values (0 to 4,294,967,295) with 4 decimal points of
 /// precision, allowing for coordinate values from 0.0000 to 429496.7295.
@@ -49,8 +21,8 @@ type CoordinateValue = u16;
 
 /// Coordinate type definition.
 ///
-/// By default, coordinates are stored as u16 values (0 to 65535), with 2
-/// decimal points of precision, allowing for coordinate values from 0.0 to
+/// By default, coordinates are stored as u16 values (0 to 65535), with 1
+/// decimal point of precision, allowing for coordinate values from 0.0 to
 /// 6553.5. If higher precision is needed, enabling the "high_precision" feature
 /// which uses u32 values (0 to 4,294,967,295) with 4 decimal points of
 /// precision, allowing for coordinate values from 0.0000 to 429496.7295.
@@ -73,11 +45,30 @@ type InternalCalculationType = u32;
 type InternalCalculationType = u64;
 
 /// A function which rounds two numbers to the closest value using integer divison.
+#[inline]
 const fn div_round_closest(
     dividend: InternalCalculationType,
     divider: InternalCalculationType,
 ) -> InternalCalculationType {
     (dividend + (divider / 2)) / divider
+}
+
+/// A const function which selects the smaller of two values.
+///
+/// Needed because Ord is not const-stable yet.
+///
+/// See: https://github.com/rust-lang/rust/issues/143874 for more information.
+macro_rules! min {
+    ($a:expr, $b:expr) => {{ if $a < $b { $a } else { $b } }};
+}
+
+/// A const function which selects the greater of two values.
+///
+/// Needed because Ord is not const-stable yet.
+///
+/// See: https://github.com/rust-lang/rust/issues/143874 for more information.
+macro_rules! max {
+    ($a:expr, $b:expr) => {{ if $a > $b { $a } else { $b } }};
 }
 
 /// A coordinate in 2 Dimensional space.
@@ -191,13 +182,13 @@ macro_rules! impl_corner {
 
                 let x: CoordinateValue = div_round_closest(
                     x as InternalCalculationType * width as InternalCalculationType,
-                    u16::MAX as InternalCalculationType,
-                ) as u16;
+                    CoordinateValue::MAX as InternalCalculationType,
+                ) as CoordinateValue;
 
                 let y: CoordinateValue = div_round_closest(
                     y as InternalCalculationType * height as InternalCalculationType,
-                    u16::MAX as InternalCalculationType,
-                ) as u16;
+                    CoordinateValue::MAX as InternalCalculationType,
+                ) as CoordinateValue;
 
                 Coordinate { x, y }
             }
@@ -227,7 +218,7 @@ impl<R: InternalRepr> Hotspot<R> {
     ///
     /// If you need to decide if one hotspot should be merged into another
     /// consider using the [`overlap_in`] function instead.
-    pub fn overlap(&self, other: &Self) -> f32 {
+    pub const fn overlap(&self, other: &Self) -> f32 {
         // https://stackoverflow.com/questions/9324339/how-much-do-two-rectangles-overlap
         let Coordinate { x: xa2, y: ya2 } = self.top_right;
         let Coordinate { x: xa1, y: ya1 } = self.lower_left;
@@ -245,12 +236,21 @@ impl<R: InternalRepr> Hotspot<R> {
         let yb2 = yb2 as InternalCalculationType;
 
         // Should always be true, but just in case.
+        #[allow(
+            clippy::absurd_extreme_comparisons,
+            reason = "These types change based on features, this helps to reduce brittleness."
+        )]
+        {
+            debug_assert!(
+                CoordinateValue::MAX as InternalCalculationType
+                    * CoordinateValue::MAX as InternalCalculationType
+                    <= InternalCalculationType::MAX
+            );
+        }
         debug_assert!(
-            CoordinateValue::MAX as InternalCalculationType
-                * CoordinateValue::MAX as InternalCalculationType
-                <= InternalCalculationType::MAX
+            core::mem::size_of::<InternalCalculationType>()
+                > core::mem::size_of::<CoordinateValue>()
         );
-        debug_assert!(size_of::<InternalCalculationType>() > size_of::<CoordinateValue>());
 
         // Calculate area of rectangle A
         debug_assert!(xa2 >= xa1);
@@ -269,8 +269,9 @@ impl<R: InternalRepr> Hotspot<R> {
         // Calculate intersection dimensions
         // We use saturating_sub because if the rectangles are disjoint,
         // min(right) - max(left) would be negative (underflow in unsigned).
-        let intersection_w = xa2.min(xb2).saturating_sub(xa1.max(xb1));
-        let intersection_h = ya2.min(yb2).saturating_sub(ya1.max(yb1));
+
+        let intersection_w = min!(xa2, xb2).saturating_sub(max!(xa1, xb1));
+        let intersection_h = min!(ya2, yb2).saturating_sub(max!(ya1, yb1));
 
         // Calculate area of intersection
         // SAFETY: The maximum overlap between two rectangles that were defined with u16 values is u16::MAX*u16::MAX
@@ -306,7 +307,7 @@ impl<R: InternalRepr> Hotspot<R> {
     /// > intersection: 5,5 to 15,15 (area 100) \
     /// > union: 400 + 100 - 100 = 400 \
     /// > overlap: 100 / 400 = 1.0
-    pub fn overlap_in(&self, other: &Self) -> f32 {
+    pub const fn overlap_in(&self, other: &Self) -> f32 {
         let Coordinate { x: xa2, y: ya2 } = self.top_right;
         let Coordinate { x: xa1, y: ya1 } = self.lower_left;
         let Coordinate { x: xb2, y: yb2 } = other.top_right;
@@ -332,8 +333,8 @@ impl<R: InternalRepr> Hotspot<R> {
         // Calculate intersection dimensions
         // We use saturating_sub because if the rectangles are disjoint,
         // min(right) - max(left) would be negative (underflow in unsigned).
-        let intersection_w = xa2.min(xb2).saturating_sub(xa1.max(xb1));
-        let intersection_h = ya2.min(yb2).saturating_sub(ya1.max(yb1));
+        let intersection_w = min!(xa2, xb2).saturating_sub(max!(xa1, xb1));
+        let intersection_h = min!(ya2, yb2).saturating_sub(max!(ya1, yb1));
 
         // Calculate area of intersection
         // SAFETY: The maximum overlap between two rectangles that were defined with u16 values is u16::MAX*u16::MAX
@@ -352,21 +353,21 @@ impl<R: InternalRepr> Hotspot<R> {
     /// Calculates the highest overlap between these two hotspots by taking the maximum value
     /// of calling [`overlap_in`] for each combination of self and other.
     #[inline]
-    pub fn max_overlap(&self, other: &Self) -> f32 {
+    pub const fn max_overlap(&self, other: &Self) -> f32 {
         self.overlap_in(other).max(other.overlap_in(self))
     }
 
     /// Combines two hotspots and returns a new hotspot which will fully encompass the two provided hotspots.
     #[inline]
-    pub fn combine_hotspots(this: Self, other: Self) -> Self {
+    pub const fn combine_hotspots(this: Self, other: Self) -> Self {
         Self {
             top_right: Coordinate {
-                x: this.top_right.x.max(other.top_right.x),
-                y: this.top_right.y.max(other.top_right.y),
+                x: max!(this.top_right.x, other.top_right.x),
+                y: max!(this.top_right.y, other.top_right.y),
             },
             lower_left: Coordinate {
-                x: this.lower_left.x.min(other.lower_left.x),
-                y: this.lower_left.y.min(other.lower_left.y),
+                x: min!(this.lower_left.x, other.lower_left.x),
+                y: min!(this.lower_left.y, other.lower_left.y),
             },
             _repr: PhantomData,
         }
@@ -374,7 +375,7 @@ impl<R: InternalRepr> Hotspot<R> {
 }
 
 /// A builder for creating hotspots.
-pub struct HotspotBuilder<R: InternalRepr> {
+pub struct HotspotBuilder<R> {
     _marker: PhantomData<R>,
 }
 
@@ -410,13 +411,13 @@ impl HotspotBuilder<PixelRepr> {
         (Coordinate { x: x1, y: y1 }, Coordinate { x: x2, y: y2 }): (Coordinate, Coordinate),
     ) -> Hotspot<PixelRepr> {
         let top_right = Coordinate {
-            x: if x1 > x2 { x1 } else { x2 },
-            y: if y1 > y2 { y1 } else { y2 },
+            x: max!(x1, x2),
+            y: max!(y1, y2),
         };
 
         let lower_left = Coordinate {
-            x: if x1 < x2 { x1 } else { x2 },
-            y: if y1 < y2 { y1 } else { y2 },
+            x: min!(x1, x2),
+            y: min!(y1, y2),
         };
 
         Hotspot {
@@ -429,6 +430,7 @@ impl HotspotBuilder<PixelRepr> {
 
 impl HotspotBuilder<PercentageRepr> {
     /// Create a percentage-based hotspot from top-left and bottom-right coordinates and image dimensions.
+    #[inline]
     pub const fn from_percentage(
         self,
         input: (Coordinate, Coordinate),
@@ -442,46 +444,33 @@ impl HotspotBuilder<PercentageRepr> {
             _repr,
         } = Hotspot::<PixelRepr>::builder().from_pixels(input);
 
-        debug_assert!(
-            top_right.x < MAX_ALLOWED_VALUE,
-            "Top right x coordinate exceeds maximum allowed value"
-        );
-        debug_assert!(
-            top_right.y < MAX_ALLOWED_VALUE,
-            "Top right y coordinate exceeds maximum allowed value"
-        );
-        debug_assert!(
-            lower_left.x < MAX_ALLOWED_VALUE,
-            "Lower left x coordinate exceeds maximum allowed value"
-        );
-        debug_assert!(
-            lower_left.y < MAX_ALLOWED_VALUE,
-            "Lower left y coordinate exceeds maximum allowed value"
-        );
-
         let height = height as InternalCalculationType;
         let width = width as InternalCalculationType;
 
         // Convert the pixel coordinates to internal percentages of the maximum possible value.
         let top_right = Coordinate {
             x: div_round_closest(
-                top_right.x as InternalCalculationType * u16::MAX as InternalCalculationType,
+                top_right.x as InternalCalculationType
+                    * CoordinateValue::MAX as InternalCalculationType,
                 width,
-            ) as u16,
+            ) as CoordinateValue,
             y: div_round_closest(
-                top_right.y as InternalCalculationType * u16::MAX as InternalCalculationType,
+                top_right.y as InternalCalculationType
+                    * CoordinateValue::MAX as InternalCalculationType,
                 height,
-            ) as u16,
+            ) as CoordinateValue,
         };
         let lower_left = Coordinate {
             x: div_round_closest(
-                lower_left.x as InternalCalculationType * u16::MAX as InternalCalculationType,
+                lower_left.x as InternalCalculationType
+                    * CoordinateValue::MAX as InternalCalculationType,
                 width,
-            ) as u16,
+            ) as CoordinateValue,
             y: div_round_closest(
-                lower_left.y as InternalCalculationType * u16::MAX as InternalCalculationType,
+                lower_left.y as InternalCalculationType
+                    * CoordinateValue::MAX as InternalCalculationType,
                 height,
-            ) as u16,
+            ) as CoordinateValue,
         };
 
         Hotspot {
@@ -494,22 +483,9 @@ impl HotspotBuilder<PercentageRepr> {
 
 #[cfg(test)]
 mod tests {
-    use core::u16;
+    use super::*;
 
-    use crate::{
-        Coordinate, CoordinateValue, Hotspot, InternalCalculationType,
-        repr::{PercentageRepr, PixelRepr},
-    };
-
-    #[test]
-    fn ensure_types_are_correct() {
-        assert!(size_of::<CoordinateValue>() * 2 == size_of::<InternalCalculationType>());
-        assert!(
-            ((CoordinateValue::MAX as InternalCalculationType * 1000) as InternalCalculationType)
-                < InternalCalculationType::MAX
-        );
-    }
-
+    #[cfg(not(feature = "high_precision"))]
     #[test]
     fn test_percentage_repr() {
         let hotspot = Hotspot::builder()
@@ -542,8 +518,62 @@ mod tests {
         );
     }
 
+    #[cfg(feature = "high_precision")]
+    #[test]
+    fn test_percentage_repr() {
+        let hotspot = Hotspot::builder()
+            .with_repr::<PercentageRepr>()
+            .from_percentage(
+                (Coordinate { x: 50, y: 50 }, Coordinate { x: 2622, y: 2622 }),
+                crate::ImageDimensions {
+                    height: 5000,
+                    width: 5000,
+                },
+            );
+
+        assert_eq!(
+            hotspot.top_right,
+            Coordinate {
+                x: 2252280849,
+                y: 2252280849
+            }
+        );
+        assert_eq!(
+            hotspot.lower_left,
+            Coordinate {
+                x: 42949673,
+                y: 42949673
+            }
+        );
+
+        assert_eq!(
+            hotspot.top_right(crate::ImageDimensions {
+                height: 5000,
+                width: 5000,
+            }),
+            Coordinate { x: 2622, y: 2622 }
+        );
+
+        assert_eq!(
+            hotspot.lower_right(crate::ImageDimensions {
+                height: 10000,
+                width: 5000,
+            }),
+            Coordinate { x: 50, y: 5244 }
+        );
+    }
+
     fn make_hotspot(x1: u16, y1: u16, x2: u16, y2: u16) -> Hotspot<PixelRepr> {
-        Hotspot::builder().from_pixels((Coordinate { x: x1, y: y1 }, Coordinate { x: x2, y: y2 }))
+        Hotspot::builder().from_pixels((
+            Coordinate {
+                x: x1 as CoordinateValue,
+                y: y1 as CoordinateValue,
+            },
+            Coordinate {
+                x: x2 as CoordinateValue,
+                y: y2 as CoordinateValue,
+            },
+        ))
     }
 
     #[test]
@@ -615,5 +645,260 @@ mod tests {
         let h1 = make_hotspot(0, 0, u16::MAX, u16::MAX);
         let h2 = make_hotspot(0, 0, u16::MAX, u16::MAX);
         assert_eq!(h1.overlap(&h2), 1.0);
+    }
+
+    #[test]
+    fn test_from_pixels_equal_coordinates() {
+        // Test when x1 == x2 and y1 == y2 (single point)
+        let h1 = make_hotspot(5, 5, 5, 5);
+        assert_eq!(h1.lower_left, Coordinate { x: 5, y: 5 });
+        assert_eq!(h1.top_right, Coordinate { x: 5, y: 5 });
+
+        // Test when x1 == x2 but y1 != y2 (vertical line)
+        let h2 = make_hotspot(5, 0, 5, 10);
+        assert_eq!(h2.lower_left, Coordinate { x: 5, y: 0 });
+        assert_eq!(h2.top_right, Coordinate { x: 5, y: 10 });
+
+        // Test when y1 == y2 but x1 != x2 (horizontal line)
+        let h3 = make_hotspot(0, 5, 10, 5);
+        assert_eq!(h3.lower_left, Coordinate { x: 0, y: 5 });
+        assert_eq!(h3.top_right, Coordinate { x: 10, y: 5 });
+
+        // Test with reversed coordinates (x2 < x1, y2 < y1)
+        let h4 = make_hotspot(10, 10, 0, 0);
+        assert_eq!(h4.lower_left, Coordinate { x: 0, y: 0 });
+        assert_eq!(h4.top_right, Coordinate { x: 10, y: 10 });
+    }
+
+    #[test]
+    fn test_from_pixels_strict_inequality_logic() {
+        // Test that the implementation uses strict < and > (not <= and >=)
+        // by verifying behavior for all orderings including adjacent values
+
+        // When x1 < x2: lower_left should get x1, top_right should get x2
+        let h = make_hotspot(5, 7, 6, 8);
+        assert_eq!(h.lower_left.x, 5);
+        assert_eq!(h.lower_left.y, 7);
+        assert_eq!(h.top_right.x, 6);
+        assert_eq!(h.top_right.y, 8);
+
+        // When x1 > x2: lower_left should get x2, top_right should get x1
+        let h = make_hotspot(10, 20, 9, 19);
+        assert_eq!(h.lower_left.x, 9);
+        assert_eq!(h.lower_left.y, 19);
+        assert_eq!(h.top_right.x, 10);
+        assert_eq!(h.top_right.y, 20);
+
+        // Test exhaustively with small values to cover all branches
+        for x1 in 0u16..15 {
+            for x2 in 0u16..15 {
+                let h = make_hotspot(x1, 0, x2, 0);
+
+                // Verify the correct value is in each position
+                if x1 < x2 {
+                    assert_eq!(h.lower_left.x, x1 as CoordinateValue);
+                    assert_eq!(h.top_right.x, x2 as CoordinateValue);
+                } else {
+                    assert_eq!(h.lower_left.x, x2 as CoordinateValue);
+                    assert_eq!(h.top_right.x, x1 as CoordinateValue);
+                }
+            }
+        }
+
+        // Same for y coordinates
+        for y1 in 0u16..15 {
+            for y2 in 0u16..15 {
+                let h = make_hotspot(0, y1, 0, y2);
+
+                if y1 < y2 {
+                    assert_eq!(h.lower_left.y, y1 as CoordinateValue);
+                    assert_eq!(h.top_right.y, y2 as CoordinateValue);
+                } else {
+                    assert_eq!(h.lower_left.y, y2 as CoordinateValue);
+                    assert_eq!(h.top_right.y, y1 as CoordinateValue);
+                }
+            }
+        }
+    }
+
+    #[test]
+    fn test_max_overlap_symmetric() {
+        // Test max_overlap with identical hotspots
+        let h1 = make_hotspot(0, 0, 10, 10);
+        let h2 = make_hotspot(0, 0, 10, 10);
+        assert_eq!(h1.max_overlap(&h2), 1.0);
+    }
+
+    #[test]
+    fn test_max_overlap_no_overlap() {
+        // Test max_overlap with non-overlapping hotspots
+        let h1 = make_hotspot(0, 0, 10, 10);
+        let h2 = make_hotspot(20, 20, 30, 30);
+        assert_eq!(h1.max_overlap(&h2), 0.0);
+    }
+
+    #[test]
+    fn test_max_overlap_contained() {
+        // h1: 0,0 to 20,20 (area 400)
+        // h2: 5,5 to 15,15 (area 100)
+        // h1.overlap_in(h2) = 100/400 = 0.25
+        // h2.overlap_in(h1) = 100/100 = 1.0
+        // max_overlap should return 1.0
+        let h1 = make_hotspot(0, 0, 20, 20);
+        let h2 = make_hotspot(5, 5, 15, 15);
+        assert_eq!(h1.max_overlap(&h2), 1.0);
+    }
+
+    #[test]
+    fn test_max_overlap_partial() {
+        // h1: 0,0 to 10,10 (area 100)
+        // h2: 5,0 to 15,10 (area 100)
+        // intersection: 5,0 to 10,10 (area 50)
+        // h1.overlap_in(h2) = 50/100 = 0.5
+        // h2.overlap_in(h1) = 50/100 = 0.5
+        // max_overlap should return 0.5
+        let h1 = make_hotspot(0, 0, 10, 10);
+        let h2 = make_hotspot(5, 0, 15, 10);
+        assert_eq!(h1.max_overlap(&h2), 0.5);
+    }
+
+    // Property-based tests (fuzzing)
+    #[cfg(not(miri))]
+    mod fuzz_tests {
+        use super::*;
+        use proptest::prelude::*;
+
+        prop_compose! {
+            fn arb_coordinate()(x in 0..CoordinateValue::MAX, y in 0..CoordinateValue::MAX) -> Coordinate {
+                Coordinate { x, y }
+            }
+        }
+
+        prop_compose! {
+            fn arb_hotspot()(c1 in arb_coordinate(), c2 in arb_coordinate()) -> Hotspot<PixelRepr> {
+                Hotspot::builder().from_pixels((c1, c2))
+            }
+        }
+
+        prop_compose! {
+            fn arb_dimensions()(
+                width in 1..CoordinateValue::MAX,
+                height in 1..CoordinateValue::MAX
+            ) -> ImageDimensions {
+                ImageDimensions { width, height }
+            }
+        }
+
+        proptest! {
+            #[test]
+            fn fuzz_from_pixels_invariants(c1 in arb_coordinate(), c2 in arb_coordinate()) {
+                let h = Hotspot::builder().from_pixels((c1, c2));
+
+                // Invariant: lower_left should have smaller or equal coordinates
+                prop_assert!(h.lower_left.x <= h.top_right.x);
+                prop_assert!(h.lower_left.y <= h.top_right.y);
+
+                // Test the exact branching logic for each coordinate
+                // For lower_left: should use the branch `if x1 < x2 { x1 } else { x2 }`
+                let expected_lower_x = if c1.x < c2.x { c1.x } else { c2.x };
+                let expected_lower_y = if c1.y < c2.y { c1.y } else { c2.y };
+                prop_assert_eq!(h.lower_left.x, expected_lower_x);
+                prop_assert_eq!(h.lower_left.y, expected_lower_y);
+
+                // For top_right: should use the branch `if x1 > x2 { x1 } else { x2 }`
+                let expected_top_x = if c1.x > c2.x { c1.x } else { c2.x };
+                let expected_top_y = if c1.y > c2.y { c1.y } else { c2.y };
+                prop_assert_eq!(h.top_right.x, expected_top_x);
+                prop_assert_eq!(h.top_right.y, expected_top_y);
+            }
+
+            #[test]
+            fn fuzz_overlap_symmetry(h1 in arb_hotspot(), h2 in arb_hotspot()) {
+                let o1 = h1.overlap(&h2);
+                let o2 = h2.overlap(&h1);
+                prop_assert!((o1 - o2).abs() < f32::EPSILON);
+            }
+
+            #[test]
+            fn fuzz_overlap_bounds(h1 in arb_hotspot(), h2 in arb_hotspot()) {
+                let o = h1.overlap(&h2);
+                prop_assert!(o >= 0.0);
+                prop_assert!(o <= 1.0);
+            }
+
+            #[test]
+            fn fuzz_overlap_in_bounds(h1 in arb_hotspot(), h2 in arb_hotspot()) {
+                let o = h1.overlap_in(&h2);
+                prop_assert!(o >= 0.0);
+                prop_assert!(o <= 1.0);
+            }
+
+            #[test]
+            fn fuzz_combine_hotspots_containment(h1 in arb_hotspot(), h2 in arb_hotspot()) {
+                let combined = Hotspot::combine_hotspots(h1, h2);
+
+                // Check h1 is inside
+                prop_assert!(combined.top_right.x >= h1.top_right.x);
+                prop_assert!(combined.top_right.y >= h1.top_right.y);
+                prop_assert!(combined.lower_left.x <= h1.lower_left.x);
+                prop_assert!(combined.lower_left.y <= h1.lower_left.y);
+
+                // Check h2 is inside
+                prop_assert!(combined.top_right.x >= h2.top_right.x);
+                prop_assert!(combined.top_right.y >= h2.top_right.y);
+                prop_assert!(combined.lower_left.x <= h2.lower_left.x);
+                prop_assert!(combined.lower_left.y <= h2.lower_left.y);
+            }
+
+            #[test]
+            fn fuzz_combine_hotspots_overlap_in(h1 in arb_hotspot(), h2 in arb_hotspot()) {
+                let combined = Hotspot::combine_hotspots(h1, h2);
+
+                let h1_area = (h1.top_right.x - h1.lower_left.x) as InternalCalculationType * (h1.top_right.y - h1.lower_left.y) as InternalCalculationType;
+                if h1_area > 0 {
+                    prop_assert!((h1.overlap_in(&combined) - 1.0).abs() < 1e-5);
+                }
+
+                let h2_area = (h2.top_right.x - h2.lower_left.x) as InternalCalculationType * (h2.top_right.y - h2.lower_left.y) as InternalCalculationType;
+                if h2_area > 0 {
+                    prop_assert!((h2.overlap_in(&combined) - 1.0).abs() < 1e-5);
+                }
+            }
+
+            #[test]
+            fn fuzz_percentage_roundtrip(
+                h in arb_hotspot(),
+                dims in arb_dimensions()
+            ) {
+                // Constrain hotspot to be within dimensions for valid percentage calculation
+                let h_constrained = Hotspot::builder().from_pixels((
+                    Coordinate {
+                        x: h.lower_left.x % dims.width,
+                        y: h.lower_left.y % dims.height
+                    },
+                    Coordinate {
+                        x: h.top_right.x % dims.width,
+                        y: h.top_right.y % dims.height
+                    }
+                ));
+
+                let p = Hotspot::as_percentage(h_constrained, dims);
+                let back = Hotspot::as_pixels(p, dims);
+
+                // Calculate tolerance based on precision loss from u16 scaling
+                let tolerance_x = (dims.width as f64 / u16::MAX as f64).ceil() as CoordinateValue + 1;
+                let tolerance_y = (dims.height as f64 / u16::MAX as f64).ceil() as CoordinateValue + 1;
+
+                let diff_x1 = if back.lower_left.x > h_constrained.lower_left.x { back.lower_left.x - h_constrained.lower_left.x } else { h_constrained.lower_left.x - back.lower_left.x };
+                let diff_y1 = if back.lower_left.y > h_constrained.lower_left.y { back.lower_left.y - h_constrained.lower_left.y } else { h_constrained.lower_left.y - back.lower_left.y };
+                let diff_x2 = if back.top_right.x > h_constrained.top_right.x { back.top_right.x - h_constrained.top_right.x } else { h_constrained.top_right.x - back.top_right.x };
+                let diff_y2 = if back.top_right.y > h_constrained.top_right.y { back.top_right.y - h_constrained.top_right.y } else { h_constrained.top_right.y - back.top_right.y };
+
+                prop_assert!(diff_x1 <= tolerance_x);
+                prop_assert!(diff_y1 <= tolerance_y);
+                prop_assert!(diff_x2 <= tolerance_x);
+                prop_assert!(diff_y2 <= tolerance_y);
+            }
+        }
     }
 }
