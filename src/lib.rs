@@ -228,7 +228,7 @@ impl<R> Hotspot<R> {
     /// > overlap: 100 / 400 = 0.25
     ///
     /// If you need to decide if one hotspot should be merged into another
-    /// consider using the [`overlap_in`] function instead.
+    /// consider using the [`Hotspot::overlap_in`] function instead.
     pub const fn overlap(&self, other: &Self) -> f32 {
         // https://stackoverflow.com/questions/9324339/how-much-do-two-rectangles-overlap
         let Coordinate { x: xa2, y: ya2 } = self.upper_right;
@@ -307,7 +307,7 @@ impl<R> Hotspot<R> {
     /// Calculate the % of this Hotspot that is in the other hotspot, returns an
     /// f32 where 0 is no overlap and 1 is complete overlap.
     ///
-    /// Differs from [`overlap`] in that instead of calculating the total area /
+    /// Differs from [`Hotspot::overlap`] in that instead of calculating the total area /
     /// by the overlap it will return the area of self that is overlapped by
     /// other - regardless of the remaining area of other.
     ///
@@ -361,7 +361,7 @@ impl<R> Hotspot<R> {
     }
 
     /// Calculates the highest overlap between these two hotspots by taking the maximum value
-    /// of calling [`overlap_in`] for each combination of self and other.
+    /// of calling [`Hotspot::overlap_in`] for each combination of self and other.
     #[inline]
     pub const fn max_overlap(&self, other: &Self) -> f32 {
         self.overlap_in(other).max(other.overlap_in(self))
