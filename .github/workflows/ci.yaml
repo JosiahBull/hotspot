@@ -31,11 +31,11 @@ jobs:
     # Setup Rust
     steps:
       - uses: actions/checkout@v4
-      - uses: Swatinem/rust-cache@v2
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: stable
           components: rustfmt, clippy
+      - uses: Swatinem/rust-cache@v2
       - name: Show Cargo and rustc version
         run: |
           cargo --version

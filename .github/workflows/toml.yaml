@@ -27,10 +27,10 @@ jobs:
       cancel-in-progress: true
     steps:
       - uses: actions/checkout@v4
-      - uses: Swatinem/rust-cache@v2
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: nightly
+      - uses: Swatinem/rust-cache@v2
       - name: Install tooling
         run: |
           cargo +nightly install --locked cargo-udeps
