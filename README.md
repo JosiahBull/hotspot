@@ -1,4 +1,4 @@
-# Hotspots
+# Hotspot
 
 A lightweight, Rust library for working with 2D rectangular hotspots. Supports
 multiple internal representations (pixel-based and percentage-based), lossless
@@ -24,7 +24,7 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-hotspots = "0.1"
+hotspot = "0.1"
 ```
 
 ### Features
@@ -38,7 +38,7 @@ hotspots = "0.1"
 ### Basic Pixel Hotspots
 
 ```rust
-use hotspots::{Hotspot, Coordinate};
+use hotspot::{Hotspot, Coordinate};
 
 // Create a hotspot from two corners (pixel coordinates)
 let hotspot = Hotspot::builder().from_pixels((
@@ -56,7 +56,7 @@ let lower_right = hotspot.lower_right();
 ### Percentage-Based Hotspots
 
 ```rust
-use hotspots::{Hotspot, Coordinate, ImageDimensions, repr::PercentageRepr};
+use hotspot::{Hotspot, Coordinate, ImageDimensions, repr::PercentageRepr};
 
 // Create a percentage-based hotspot
 let dimensions = ImageDimensions { width: 1920, height: 1080 };

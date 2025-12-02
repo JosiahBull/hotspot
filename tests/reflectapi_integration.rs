@@ -2,7 +2,7 @@
 
 use std::{io::Write as _, time::Duration};
 
-use hotspots::{Coordinate, Hotspot, repr::PixelRepr};
+use hotspot::{Coordinate, Hotspot, repr::PixelRepr};
 use reflectapi::codegen::rust::Config;
 use tokio::time::timeout;
 
@@ -84,21 +84,47 @@ fn build_test_api() -> (reflectapi::Schema, Vec<reflectapi::Router<()>>) {
         .expect("Failed to build reflectapi schema")
 }
 
+/// Format the provided code using `rustfmt`.
+fn rustfmt(code: &str) -> String {
+    let mut child = std::process::Command::new("rustfmt")
+        .arg("--edition")
+        .arg("2024")
+        .stdin(std::process::Stdio::piped())
+        .stdout(std::process::Stdio::piped())
+        .spawn()
+        .expect("Failed to spawn rustfmt");
+
+    let mut stdin = child.stdin.take().expect("Failed to open stdin");
+    stdin
+        .write_all(code.as_bytes())
+        .expect("Failed to write to stdin");
+    drop(stdin);
+
+    let output = child.wait_with_output().expect("Failed to read stdout");
+
+    String::from_utf8(output.stdout).expect("Invalid UTF-8")
+}
+
 #[test]
 fn test_snapshot_rust_client() {
     let (schema, _router) = build_test_api();
 
-    let mut config = Config::default();
-    config.format(true).typecheck(true);
-
+    let config = Config::default();
     let generated = reflectapi::codegen::rust::generate(schema, &config)
         .expect("Failed to generate Rust client");
 
     // Write the generated client to file for use by other tests
     // Remove inner attributes that don't work with include! macro
-    let generated_for_file = generated
+    let clean_code = generated
         .replace("#![allow(non_camel_case_types)]", "")
         .replace("#![allow(dead_code)]", "");
+
+    let wrapped_code = format!(
+        "#[cfg(feature = \"reflectapi\")]\nmod internal {{\n{}\n}}\n#[cfg(feature = \"reflectapi\")]\n\npub use internal::*;",
+        clean_code
+    );
+
+    let generated_for_file = rustfmt(&wrapped_code);
 
     let client_path = std::path::PathBuf::from(env!("CARGO_MANIFEST_DIR"))
         .join("tests")
@@ -164,7 +190,7 @@ async fn test_echo_coordinate() {
             .expect("Failed to create generated client");
 
         // Test using generated client
-        let test_coord = (10u16, 20u16);
+        let test_coord = (10, 20);
 
         let echoed = client
             .echo_coordinate(test_coord, reflectapi::Empty {})
@@ -264,7 +290,7 @@ async fn test_generated_client_integration() {
         println!("✓ Generated client successfully called echo_hotspot");
 
         // Test 2: Echo coordinate using generated client
-        let test_coord = (150u16, 250u16);
+        let test_coord = (150, 250);
 
         let echoed_coord = client
             .echo_coordinate(test_coord, reflectapi::Empty {})

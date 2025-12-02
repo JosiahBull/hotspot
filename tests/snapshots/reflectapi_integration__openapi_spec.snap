@@ -23,10 +23,10 @@ expression: spec_json
                 "type": "array",
                 "prefixItems": [
                   {
-                    "$ref": "#/components/schemas/u16"
+                    "$ref": "#/components/schemas/u32"
                   },
                   {
-                    "$ref": "#/components/schemas/u16"
+                    "$ref": "#/components/schemas/u32"
                   }
                 ]
               }
@@ -44,10 +44,10 @@ expression: spec_json
                   "type": "array",
                   "prefixItems": [
                     {
-                      "$ref": "#/components/schemas/u16"
+                      "$ref": "#/components/schemas/u32"
                     },
                     {
-                      "$ref": "#/components/schemas/u16"
+                      "$ref": "#/components/schemas/u32"
                     }
                   ]
                 }
@@ -101,21 +101,21 @@ expression: spec_json
         ],
         "properties": {
           "x1": {
-            "$ref": "#/components/schemas/u16"
+            "$ref": "#/components/schemas/u32"
           },
           "x2": {
-            "$ref": "#/components/schemas/u16"
+            "$ref": "#/components/schemas/u32"
           },
           "y1": {
-            "$ref": "#/components/schemas/u16"
+            "$ref": "#/components/schemas/u32"
           },
           "y2": {
-            "$ref": "#/components/schemas/u16"
+            "$ref": "#/components/schemas/u32"
           }
         }
       },
-      "u16": {
-        "description": "16-bit unsigned integer",
+      "u32": {
+        "description": "32-bit unsigned integer",
         "type": "integer"
       }
     }

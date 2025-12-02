@@ -1,5 +1,5 @@
 [package]
-name = "hotspots"
+name = "hotspot"
 version = "0.1.0"
 edition = "2024"
 authors = ["Josiah Bull <josiah.bull7@gmail.com>"]
@@ -20,7 +20,7 @@ reflectapi = { version = "0.16", default-features = false, features = [], option
 serde = { version = "1", default-features = false, features = [], optional = true }
 
 [features]
-default = ["reflectapi"]
+default = []
 high_precision = []
 serde = ["dep:serde"]
 reflectapi = ["dep:reflectapi", "serde"]
@@ -35,7 +35,6 @@ axum = { version = "0.8" }
 reqwest = { version = "0.12", features = ["json"] }
 http = { version = "1" }
 bytes = { version = "1" }
-regex = { version = "1" }
 
 # Insta recommends compiling with optimizations It takes longer on initial compile, but makes test
 # runs faster. https://insta.rs/docs/quickstart/
