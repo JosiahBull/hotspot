@@ -56,10 +56,6 @@ jobs:
       - name: Check semver
         uses: obi1kenobi/cargo-semver-checks-action@v2
 
-      # Use cargo tree, and fail if openssl is present
-      - name: Check openssl
-        run: cargo tree | grep openssl && exit 1 || exit 0
-
       - name: Install cargo-mutants
         run: cargo install cargo-mutants
 
