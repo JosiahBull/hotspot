@@ -1,5 +1,5 @@
 [package]
-name = "hotspot"
+name = "hotspots"
 version = "0.1.0"
 edition = "2024"
 authors = ["Josiah Bull <josiah.bull7@gmail.com>"]

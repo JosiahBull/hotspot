@@ -2,7 +2,7 @@
 
 use std::{io::Write as _, time::Duration};
 
-use hotspot::{Coordinate, Hotspot, repr::PixelRepr};
+use hotspots::{Coordinate, Hotspot, repr::PixelRepr};
 use reflectapi::codegen::rust::Config;
 use tokio::time::timeout;
 

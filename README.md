@@ -24,7 +24,7 @@ Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
-hotspot = "0.1"
+hotspots = "0.1"
 ```
 
 ### Features
@@ -38,7 +38,7 @@ hotspot = "0.1"
 ### Basic Pixel Hotspots
 
 ```rust
-use hotspot::{Hotspot, Coordinate};
+use hotspots::{Hotspot, Coordinate};
 
 // Create a hotspot from two corners (pixel coordinates)
 let hotspot = Hotspot::builder().from_pixels((
@@ -56,7 +56,7 @@ let lower_right = hotspot.lower_right();
 ### Percentage-Based Hotspots
 
 ```rust
-use hotspot::{Hotspot, Coordinate, ImageDimensions, repr::PercentageRepr};
+use hotspots::{Hotspot, Coordinate, ImageDimensions, repr::PercentageRepr};
 
 // Create a percentage-based hotspot
 let dimensions = ImageDimensions { width: 1920, height: 1080 };
