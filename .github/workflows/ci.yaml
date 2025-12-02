@@ -31,11 +31,18 @@ jobs:
     # Setup Rust
     steps:
       - uses: actions/checkout@v4
+
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: stable
           components: rustfmt, clippy
+
       - uses: Swatinem/rust-cache@v2
+        with:
+          cache-all-crates: true
+          cache-bin: true
+          cache-targets: true
+
       - name: Show Cargo and rustc version
         run: |
           cargo --version
@@ -64,9 +71,3 @@ jobs:
         with:
           name: mutants-out
           path: mutants.out
-
-      # Check cargo deny
-      - name: Install cargo-deny
-        run: cargo install cargo-deny
-      - name: Check cargo-deny
-        run: cargo deny check

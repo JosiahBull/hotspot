@@ -15,7 +15,6 @@ env:
   CARGO_NET_RETRY: 10
   CI: 1
   RUST_BACKTRACE: short
-  RUSTFLAGS: "-W rust-2021-compatibility"
   RUSTUP_MAX_RETRIES: 10
 
 jobs:
@@ -27,13 +26,21 @@ jobs:
       cancel-in-progress: true
     steps:
       - uses: actions/checkout@v4
+
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: nightly
+
       - uses: Swatinem/rust-cache@v2
+        with:
+          cache-all-crates: true
+          cache-bin: true
+          cache-targets: true
+
       - name: Install tooling
         run: |
           cargo +nightly install --locked cargo-udeps
+
       - name: Show Cargo and rustc version
         run: |
           cargo +nightly --version
@@ -41,6 +48,12 @@ jobs:
 
       - name: Check for unused dependencies
         run: cargo +nightly udeps --all-targets --all-features
+
+      # Ensure licenses are all good
+      - name: Install cargo-deny
+        run: cargo install cargo-deny
+      - name: Check cargo-deny
+        run: cargo deny --all-features check
 
       # Use cargo tree, and fail if openssl is present
       - name: Check openssl
