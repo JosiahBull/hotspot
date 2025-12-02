@@ -22,10 +22,13 @@ env:
 
 jobs:
   build:
-    runs-on: ubuntu-latest
+    runs-on: ${{ matrix.os }}
+    strategy:
+      matrix:
+        os: [ubuntu-latest, windows-latest, macos-latest]
     timeout-minutes: 30
     concurrency:
-      group: ci-${{ github.repository }}-${{ github.ref }}
+      group: ci-${{ github.repository }}-${{ github.ref }}-${{ matrix.os }}
       cancel-in-progress: true
 
     # Setup Rust
@@ -49,25 +52,28 @@ jobs:
           rustc --version
 
       - name: Rustfmt
+        if: matrix.os == 'ubuntu-latest'
         run: cargo fmt --all -- --check
-
-      - name: Build
-        run: cargo build --all-targets --all-features
 
       - name: Test
         run: cargo test --all-targets --all-features --workspace
 
       - name: Clippy
+        if: matrix.os == 'ubuntu-latest'
         run: cargo clippy --all-targets --all-features -- -D warnings
 
       - name: Check semver
+        if: matrix.os == 'ubuntu-latest'
         uses: obi1kenobi/cargo-semver-checks-action@v2
 
       - name: Install cargo-mutants
+        if: matrix.os == 'ubuntu-latest'
         run: cargo install cargo-mutants
 
-      - run: cargo mutants -vV --in-place --all-features
-      - uses: actions/upload-artifact@v4
+      - if: matrix.os == 'ubuntu-latest'
+        run: cargo mutants -vV --in-place --all-features
+      - if: matrix.os == 'ubuntu-latest'
+        uses: actions/upload-artifact@v4
         with:
           name: mutants-out
           path: mutants.out
