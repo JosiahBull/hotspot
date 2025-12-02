@@ -1,10 +1,7 @@
 extern crate alloc;
 
 use alloc::{collections::BTreeSet, string::String, vec};
-use reflectapi::{
-    Field, Fields, Input, LanguageSpecificTypeCodegenConfig, Output, RustTypeCodegenConfig, Struct,
-    Type, TypeParameter, TypeReference,
-};
+use reflectapi::{Input, Output};
 
 // TODO: don't have the `codegen` feature enabled by default.
 
@@ -38,7 +35,7 @@ impl<R> Input for Hotspot<R> {
                         name: "x1".into(),
                         serde_name: "".into(),
                         description: "".into(),
-                        deprecation_note: None.into(),
+                        deprecation_note: None,
                         type_ref: coordinate_value_type.clone(),
                         required: true,
                         flattened: false,
@@ -49,7 +46,7 @@ impl<R> Input for Hotspot<R> {
                         name: "y1".into(),
                         serde_name: "".into(),
                         description: "".into(),
-                        deprecation_note: None.into(),
+                        deprecation_note: None,
                         type_ref: coordinate_value_type.clone(),
                         required: true,
                         flattened: false,
@@ -60,7 +57,7 @@ impl<R> Input for Hotspot<R> {
                         name: "x2".into(),
                         serde_name: "".into(),
                         description: "".into(),
-                        deprecation_note: None.into(),
+                        deprecation_note: None,
                         type_ref: coordinate_value_type.clone(),
                         required: true,
                         flattened: false,
@@ -71,7 +68,7 @@ impl<R> Input for Hotspot<R> {
                         name: "y2".into(),
                         serde_name: "".into(),
                         description: "".into(),
-                        deprecation_note: None.into(),
+                        deprecation_note: None,
                         type_ref: coordinate_value_type.clone(),
                         required: true,
                         flattened: false,
@@ -108,7 +105,7 @@ impl<R> Output for Hotspot<R> {
                         name: "x1".into(),
                         serde_name: "".into(),
                         description: "".into(),
-                        deprecation_note: None.into(),
+                        deprecation_note: None,
                         type_ref: coordinate_value_type.clone(),
                         required: true,
                         flattened: false,
@@ -119,7 +116,7 @@ impl<R> Output for Hotspot<R> {
                         name: "y1".into(),
                         serde_name: "".into(),
                         description: "".into(),
-                        deprecation_note: None.into(),
+                        deprecation_note: None,
                         type_ref: coordinate_value_type.clone(),
                         required: true,
                         flattened: false,
@@ -130,7 +127,7 @@ impl<R> Output for Hotspot<R> {
                         name: "x2".into(),
                         serde_name: "".into(),
                         description: "".into(),
-                        deprecation_note: None.into(),
+                        deprecation_note: None,
                         type_ref: coordinate_value_type.clone(),
                         required: true,
                         flattened: false,
@@ -141,7 +138,7 @@ impl<R> Output for Hotspot<R> {
                         name: "y2".into(),
                         serde_name: "".into(),
                         description: "".into(),
-                        deprecation_note: None.into(),
+                        deprecation_note: None,
                         type_ref: coordinate_value_type.clone(),
                         required: true,
                         flattened: false,

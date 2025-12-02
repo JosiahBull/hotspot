@@ -2,6 +2,18 @@
 name = "hotspots"
 version = "0.1.0"
 edition = "2024"
+authors = ["Josiah Bull <josiah.bull7@gmail.com>"]
+description = "A lightweight Rust library for working with 2D rectangular hotspots with support for pixel and percentage-based coordinates"
+readme = "README.md"
+homepage = "https://github.com/josiahbull/hotspots"
+repository = "https://github.com/josiahbull/hotspots"
+license = "MIT OR Apache-2.0"
+keywords = ["hotspot", "coordinates", "rectangle", "geometry", "2d"]
+categories = ["algorithms", "graphics", "data-structures"]
+exclude = [
+    ".github/*",
+    "proptest-regressions/*",
+]
 
 [dependencies]
 reflectapi = { version = "0.16", default-features = false, features = [], optional = true }
@@ -32,10 +44,8 @@ type_complexity = "allow"
 get_first = "allow"
 default_constructed_unit_structs = "allow"
 expect_used = "allow"
-
 cloned_instead_of_copied = "warn"
 default_numeric_fallback = "allow"
-
 transmute_ptr_to_ptr = "deny"
 unchecked_duration_subtraction = "deny"
 unsafe_derive_deserialize = "deny"
@@ -152,5 +162,4 @@ create_dir = "warn"
 missing_docs_in_private_items = "warn"
 mixed_read_write_in_expression = "warn"
 string_lit_chars_any = "warn"
-
 allow_attributes_without_reason = "forbid"

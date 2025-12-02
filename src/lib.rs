@@ -2,7 +2,6 @@
 #![no_std]
 
 // ## TODO
-// - Ensure bottomleft/top right is consistent everywhere.
 // - Test exported interface.
 // - Consider providing fully safe interface.
 // - Introduce utilites to make conversions between different origins easier.
@@ -502,7 +501,7 @@ impl HotspotBuilder<PercentageRepr> {
         };
 
         Hotspot {
-            upper_right: upper_right,
+            upper_right,
             lower_left,
             _repr: core::marker::PhantomData,
         }
