@@ -934,10 +934,10 @@ mod tests {
                 let tolerance_x = (dims.width as f64 / u16::MAX as f64).ceil() as CoordinateValue + 1;
                 let tolerance_y = (dims.height as f64 / u16::MAX as f64).ceil() as CoordinateValue + 1;
 
-                let diff_x1 = if back.lower_left.x > h_constrained.lower_left.x { back.lower_left.x - h_constrained.lower_left.x } else { h_constrained.lower_left.x - back.lower_left.x };
-                let diff_y1 = if back.lower_left.y > h_constrained.lower_left.y { back.lower_left.y - h_constrained.lower_left.y } else { h_constrained.lower_left.y - back.lower_left.y };
-                let diff_x2 = if back.upper_right.x > h_constrained.upper_right.x { back.upper_right.x - h_constrained.upper_right.x } else { h_constrained.upper_right.x - back.upper_right.x };
-                let diff_y2 = if back.upper_right.y > h_constrained.upper_right.y { back.upper_right.y - h_constrained.upper_right.y } else { h_constrained.upper_right.y - back.upper_right.y };
+                let diff_x1 = back.lower_left.x.abs_diff(h_constrained.lower_left.x);
+                let diff_y1 = back.lower_left.y.abs_diff(h_constrained.lower_left.y);
+                let diff_x2 = back.upper_right.x.abs_diff(h_constrained.upper_right.x);
+                let diff_y2 = back.upper_right.y.abs_diff(h_constrained.upper_right.y);
 
                 prop_assert!(diff_x1 <= tolerance_x);
                 prop_assert!(diff_y1 <= tolerance_y);

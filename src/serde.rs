@@ -608,14 +608,14 @@ mod tests {
     #[test]
     fn test_coordinate_to_value() {
         let coord = Coordinate { x: 777, y: 888 };
-        let value = serde_json::to_value(&coord).unwrap();
+        let value = serde_json::to_value(coord).unwrap();
         assert_eq!(value, serde_json::json!([777, 888]));
     }
 
     #[test]
     fn test_hotspot_to_value() {
         let hotspot = make_hotspot(1, 2, 3, 4);
-        let value = serde_json::to_value(&hotspot).unwrap();
+        let value = serde_json::to_value(hotspot).unwrap();
         assert!(value.is_object());
         assert_eq!(value["x1"], 3);
         assert_eq!(value["y1"], 4);
