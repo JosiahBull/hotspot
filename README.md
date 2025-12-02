@@ -1,56 +1,92 @@
 # Hotspots
 
-A simple crate for working with two dimensional hotspots, supports working with multiple coordinate systems, lossless scaling, and hit testing.
+A lightweight, Rust library for working with 2D rectangular hotspots. Supports
+multiple internal representations (pixel-based and percentage-based), lossless
+conversions, overlap detection, utiltiies for handling conversions between
+different points of origins and generally working with hotspots are also
+provided.
 
-## Usage
+## Important Note on Precision
+
+Coordinates are stored as fractions of the maximum value:
+- **Default (u16)**: 65,536 discrete positions
+- **With `high_precision` (u32)**: 4,294,967,296 discrete positions
+
+**When precision loss occurs**: If your image dimensions exceed these values,
+multiple adjacent pixels map to the same internal representation. For
+percentage-based hotspots on a 100,000×100,000 pixel image with u16, expect ~1-2
+pixel rounding errors. Use `high_precision` for images larger than ~65,000
+pixels in either dimension.
+
+## Installation
+
+Add to your `Cargo.toml`:
 
 ```toml
 [dependencies]
 hotspots = "0.1"
 ```
 
+### Features
+
+- `serde`: Enable serialization/deserialization support
+- `reflectapi`: Enable ReflectAPI schema generation
+- `high_precision`: Use `u32` coordinates with instead of `u16`. See [Important Note on Precision](##important-note-on-precision) for more information.
+
+## Usage
+
+### Basic Pixel Hotspots
+
 ```rust
-use hotspots::{Hotspot, HotspotCollection, CoordinateSystem, Origin};
+use hotspots::{Hotspot, Coordinate};
 
-fn main() {
-    // Create a hotspot in pixel coordinates
-    let hotspot = Hotspot::new(50.0, 50.0, CoordinateSystem::Pixels);
-    
-    // By default we assume that you want to use bottom left as the origin, but this can be changed.
-    hotspot.set_origin(Origin::BottomLeft);
+// Create a hotspot from two corners (pixel coordinates)
+let hotspot = Hotspot::builder().from_pixels((
+    Coordinate { x: 100, y: 150 },
+    Coordinate { x: 200, y: 250 },
+));
 
-    // Create a collection of hotspots
-    let mut collection = HotspotCollection::new();
-    collection.add_hotspot(hotspot);
-
-    // Scale the hotspots to a different coordinate system
-    let scaled_collection = collection.scale_to(CoordinateSystem::Percentage, 200.0, 200.0);
-
-    // Check if a point hits any hotspot
-    let hit = scaled_collection.hit_test(25.0, 25.0);
-    println!("Hit: {}", hit);
-}
+// Access corners
+let upper_right = hotspot.upper_right();
+let lower_left = hotspot.lower_left();
+let upper_left = hotspot.upper_left();
+let lower_right = hotspot.lower_right();
 ```
 
-## Not Supported
+### Percentage-Based Hotspots
 
-This crate is quite limited at the moment, designed to be a simple utility for working with hotspots.
+```rust
+use hotspots::{Hotspot, Coordinate, ImageDimensions, repr::PercentageRepr};
 
-Limitations:
-- Subpixel accuracy is not supported.
-- Rotated hotspots are not supported, they must lie on axis-aligned bounding boxes.
-- Only rectangular hotspots are supported.
+// Create a percentage-based hotspot
+let dimensions = ImageDimensions { width: 1920, height: 1080 };
 
-I am open to expanding on this crate in the future - please open an issue!
+let hotspot = Hotspot::builder()
+    .with_repr::<PercentageRepr>()
+    .from_percentage(
+        (
+            Coordinate { x: 100, y: 200 },  // Internal percentage representation
+            Coordinate { x: 300, y: 400 }
+        ),
+        dimensions
+    );
+
+// Get pixel coordinates for a specific image size
+let pixel_coords = hotspot.upper_right(dimensions);
+```
+
+## Limitations
+
+- **No Rotation**: Hotspots must be axis-aligned rectangles
+- **Rectangular Only**: Only rectangular hotspots are supported,
+  though we do provide utilties for converting point-based coordinates.
 
 ## License
 
-Licensed under either of
+Licensed under either of:
 
- * Apache License, Version 2.0
-   ([LICENSE-APACHE](LICENSE-APACHE) or http://www.apache.org/licenses/LICENSE-2.0)
- * MIT license
-   ([LICENSE-MIT](LICENSE-MIT) or http://opensource.org/licenses/MIT)
+- Apache License, Version 2.0 ([LICENSE-APACHE](LICENSE-APACHE) or <http://www.apache.org/licenses/LICENSE-2.0>)
+- MIT license ([LICENSE-MIT](LICENSE-MIT) or <http://opensource.org/licenses/MIT>)
 
 at your option.
 

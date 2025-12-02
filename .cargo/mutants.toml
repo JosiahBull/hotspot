@@ -7,4 +7,6 @@ exclude_re = [
     "src/lib.rs:404:22.*>=",  # replace > with >= - equivalent when y1 == y2
     "src/lib.rs:409:22.*<=",  # replace < with <= - equivalent when x1 == x2
     "src/lib.rs:410:22.*<=",  # replace < with <= - equivalent when y1 == y2
+    "src/serde.rs.*", # I don't care about mutants in serialization code.
+    "src/reflectapi.rs.*", # I don't care about mutants in reflection API code.
 ]

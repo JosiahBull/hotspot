@@ -1,6 +1,21 @@
+#![doc = include_str!("../README.md")]
 #![no_std]
 
-mod repr;
+// ## TODO
+// - Ensure bottomleft/top right is consistent everywhere.
+// - Test exported interface.
+// - Consider providing fully safe interface.
+// - Introduce utilites to make conversions between different origins easier.
+// - Introduce utilties to make converting from a single point into a hotspot easy, including providing a str length.
+// - Make the repr module almost fully internal and provide simple exported types - similar to the MPN crate.
+
+pub mod repr;
+
+#[cfg(feature = "serde")]
+mod serde;
+
+#[cfg(feature = "reflectapi")]
+mod reflectapi;
 
 use core::marker::PhantomData;
 
@@ -8,29 +23,22 @@ use repr::*;
 
 /// Coordinate type definition.
 ///
-/// By default, coordinates are stored as u16 values (0 to 65535), with 1
-/// decimal point of precision, allowing for coordinate values from 0.0 to
-/// 6553.5. If higher precision is needed, enabling the "high_precision" feature
-/// which uses u32 values (0 to 4,294,967,295) with 4 decimal points of
-/// precision, allowing for coordinate values from 0.0000 to 429496.7295.
+/// Coordinates are stored as fractions of `CoordinateValue::MAX`. The u16 type
+/// provides 65,536 discrete positions. For percentage-based hotspots, precision
+/// loss occurs when image dimensions exceed this value (expect ~1-2 pixel
+/// rounding on 100,000px images).
 ///
-/// If you need more than 4 decimal points of precision, consider implementing a
-/// custom coordinate type.
+/// Enable the "high_precision" feature for images larger than ~65,000 pixels.
 #[cfg(not(feature = "high_precision"))]
-type CoordinateValue = u16;
+pub type CoordinateValue = u16;
 
 /// Coordinate type definition.
 ///
-/// By default, coordinates are stored as u16 values (0 to 65535), with 1
-/// decimal point of precision, allowing for coordinate values from 0.0 to
-/// 6553.5. If higher precision is needed, enabling the "high_precision" feature
-/// which uses u32 values (0 to 4,294,967,295) with 4 decimal points of
-/// precision, allowing for coordinate values from 0.0000 to 429496.7295.
-///
-/// If you need more than 4 decimal points of precision, consider implementing a
-/// custom coordinate type.
+/// Coordinates are stored as fractions of `CoordinateValue::MAX`. The u32 type
+/// provides 4,294,967,296 discrete positions, sufficient for virtually all
+/// image sizes without precision loss.
 #[cfg(feature = "high_precision")]
-type CoordinateValue = u32;
+pub type CoordinateValue = u32;
 
 /// An internal type used for the result from multiplication between two
 /// [`CoordinateValue`] to ensure no loss of precision.
@@ -75,47 +83,51 @@ macro_rules! max {
 ///
 /// The coordinates contained in this struct are always non-negative and bounded
 /// by the maximum allowed value based on the current precision settings. See
-/// [`CoordinateValue`] for more details.
+/// [`CoordinateValue`] for more details. The origin point should always be the
+/// lower-left of the image.
 ///
 /// Can store one of two internal representations:
 /// - Pixel-based: Absolute pixel values relative to the image dimensions,
 ///   e.g., (150, 300).
 /// - Percentage-based: Relative percentage values of the image dimensions,
-///   e.g., (15.0%, 30.0%), stored as (1500, 3000) with 2 decimal points of
-///   precision or (15000, 30000) with 4 decimal points of precision.
+///   e.g., (15.0%, 30.0%), stored as a percentage of the maximum value of
+///   `CoordinateValue`.
 ///
-/// By default, coordinates use a pixel-based internal representation.
+/// x is the horizontal axis (left to right), y is the vertical axis (bottom to top).
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub struct Coordinate {
-    x: CoordinateValue,
-    y: CoordinateValue,
+    pub x: CoordinateValue,
+    pub y: CoordinateValue,
 }
 
 /// The dimensions of an image.
 #[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub struct ImageDimensions {
-    height: CoordinateValue,
-    width: CoordinateValue,
+    pub width: CoordinateValue,
+    pub height: CoordinateValue,
 }
 
-/// A rectangular hotspot represented as a rectangle with two corners.
-#[derive(Debug, Clone, Copy)]
-pub struct Hotspot<R: InternalRepr = PixelRepr> {
-    top_right: Coordinate,
+/// A rectangular hotspot represented as two `Coordinate`s: upper-right and lower-left.
+///
+/// The internal representation can be either pixel-based or percentage-based,
+/// as indicated by the generic parameter `R`. By default, it uses pixel-based representation.
+#[derive(Debug, Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
+pub struct Hotspot<R = PixelRepr> {
+    upper_right: Coordinate,
     lower_left: Coordinate,
     _repr: core::marker::PhantomData<R>,
 }
 
 impl Hotspot<PixelRepr> {
     #[inline]
-    pub const fn top_right(&self) -> Coordinate {
-        self.top_right
+    pub const fn upper_right(&self) -> Coordinate {
+        self.upper_right
     }
 
     #[inline]
-    pub const fn top_left(&self) -> Coordinate {
+    pub const fn upper_left(&self) -> Coordinate {
         Coordinate {
-            x: self.top_right.x,
+            x: self.upper_right.x,
             y: self.lower_left.y,
         }
     }
@@ -129,7 +141,7 @@ impl Hotspot<PixelRepr> {
     pub const fn lower_right(&self) -> Coordinate {
         Coordinate {
             x: self.lower_left.x,
-            y: self.top_right.y,
+            y: self.upper_right.y,
         }
     }
 
@@ -139,14 +151,14 @@ impl Hotspot<PixelRepr> {
         image_dimensions: ImageDimensions,
     ) -> Hotspot<PercentageRepr> {
         let Self {
-            top_right,
+            upper_right,
             lower_left,
-            _repr,
+            _repr: _,
         } = this;
-        // TODO: technically not the most efficient becuase `from_percentage` performs a bunch of checks that we don't really need anymore.
+        // TODO: technically not the most efficient because `from_percentage` performs a bunch of checks that we don't really need anymore.
         Hotspot::builder()
             .with_repr::<PercentageRepr>()
-            .from_percentage((top_right, lower_left), image_dimensions)
+            .from_percentage((upper_right, lower_left), image_dimensions)
     }
 }
 
@@ -154,7 +166,7 @@ impl Hotspot<PercentageRepr> {
     #[inline]
     pub const fn as_pixels(this: Self, image_dimensions: ImageDimensions) -> Hotspot<PixelRepr> {
         Hotspot {
-            top_right: this.top_right(image_dimensions),
+            upper_right: this.upper_right(image_dimensions),
             lower_left: this.lower_left(image_dimensions),
             _repr: PhantomData,
         }
@@ -196,12 +208,12 @@ macro_rules! impl_corner {
     };
 }
 
-impl_corner!(top_right, "top-right");
-impl_corner!(top_left, "top-left");
+impl_corner!(upper_right, "upper-right");
+impl_corner!(upper_left, "upper-left");
 impl_corner!(lower_left, "lower-left");
 impl_corner!(lower_right, "lower-right");
 
-impl<R: InternalRepr> Hotspot<R> {
+impl<R> Hotspot<R> {
     /// Calculate the overlap between two hotspots as a value between 0 and 1
     /// where 0 is no overlap and 1 is complete overlap.
     ///
@@ -220,9 +232,9 @@ impl<R: InternalRepr> Hotspot<R> {
     /// consider using the [`overlap_in`] function instead.
     pub const fn overlap(&self, other: &Self) -> f32 {
         // https://stackoverflow.com/questions/9324339/how-much-do-two-rectangles-overlap
-        let Coordinate { x: xa2, y: ya2 } = self.top_right;
+        let Coordinate { x: xa2, y: ya2 } = self.upper_right;
         let Coordinate { x: xa1, y: ya1 } = self.lower_left;
-        let Coordinate { x: xb2, y: yb2 } = other.top_right;
+        let Coordinate { x: xb2, y: yb2 } = other.upper_right;
         let Coordinate { x: xb1, y: yb1 } = other.lower_left;
 
         // Cast to InternalCalculationType to prevent overflow during area calculation
@@ -269,7 +281,6 @@ impl<R: InternalRepr> Hotspot<R> {
         // Calculate intersection dimensions
         // We use saturating_sub because if the rectangles are disjoint,
         // min(right) - max(left) would be negative (underflow in unsigned).
-
         let intersection_w = min!(xa2, xb2).saturating_sub(max!(xa1, xb1));
         let intersection_h = min!(ya2, yb2).saturating_sub(max!(ya1, yb1));
 
@@ -308,9 +319,9 @@ impl<R: InternalRepr> Hotspot<R> {
     /// > union: 400 + 100 - 100 = 400 \
     /// > overlap: 100 / 400 = 1.0
     pub const fn overlap_in(&self, other: &Self) -> f32 {
-        let Coordinate { x: xa2, y: ya2 } = self.top_right;
+        let Coordinate { x: xa2, y: ya2 } = self.upper_right;
         let Coordinate { x: xa1, y: ya1 } = self.lower_left;
-        let Coordinate { x: xb2, y: yb2 } = other.top_right;
+        let Coordinate { x: xb2, y: yb2 } = other.upper_right;
         let Coordinate { x: xb1, y: yb1 } = other.lower_left;
 
         // Cast to InternalCalculationType to prevent overflow during area calculation
@@ -361,9 +372,9 @@ impl<R: InternalRepr> Hotspot<R> {
     #[inline]
     pub const fn combine_hotspots(this: Self, other: Self) -> Self {
         Self {
-            top_right: Coordinate {
-                x: max!(this.top_right.x, other.top_right.x),
-                y: max!(this.top_right.y, other.top_right.y),
+            upper_right: Coordinate {
+                x: max!(this.upper_right.x, other.upper_right.x),
+                y: max!(this.upper_right.y, other.upper_right.y),
             },
             lower_left: Coordinate {
                 x: min!(this.lower_left.x, other.lower_left.x),
@@ -375,8 +386,25 @@ impl<R: InternalRepr> Hotspot<R> {
 }
 
 /// A builder for creating hotspots.
+#[derive(Clone, Copy, Hash, PartialEq, Eq, PartialOrd, Ord)]
 pub struct HotspotBuilder<R> {
     _marker: PhantomData<R>,
+}
+
+impl core::fmt::Debug for HotspotBuilder<PixelRepr> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("HotspotBuilder")
+            .field("kind", &"Pixel Representation")
+            .finish()
+    }
+}
+
+impl core::fmt::Debug for HotspotBuilder<PercentageRepr> {
+    fn fmt(&self, f: &mut core::fmt::Formatter<'_>) -> core::fmt::Result {
+        f.debug_struct("HotspotBuilder")
+            .field("kind", &"Percentage Representation")
+            .finish()
+    }
 }
 
 impl Hotspot {
@@ -410,7 +438,7 @@ impl HotspotBuilder<PixelRepr> {
         self,
         (Coordinate { x: x1, y: y1 }, Coordinate { x: x2, y: y2 }): (Coordinate, Coordinate),
     ) -> Hotspot<PixelRepr> {
-        let top_right = Coordinate {
+        let upper_right = Coordinate {
             x: max!(x1, x2),
             y: max!(y1, y2),
         };
@@ -421,7 +449,7 @@ impl HotspotBuilder<PixelRepr> {
         };
 
         Hotspot {
-            top_right,
+            upper_right,
             lower_left,
             _repr: core::marker::PhantomData,
         }
@@ -439,23 +467,23 @@ impl HotspotBuilder<PercentageRepr> {
         // Use the HotspotBuilder<PixelRepr>::from_pixel representation to handle
         // which point is which.
         let Hotspot {
-            top_right,
+            upper_right,
             lower_left,
-            _repr,
+            _repr: _,
         } = Hotspot::<PixelRepr>::builder().from_pixels(input);
 
         let height = height as InternalCalculationType;
         let width = width as InternalCalculationType;
 
         // Convert the pixel coordinates to internal percentages of the maximum possible value.
-        let top_right = Coordinate {
+        let upper_right = Coordinate {
             x: div_round_closest(
-                top_right.x as InternalCalculationType
+                upper_right.x as InternalCalculationType
                     * CoordinateValue::MAX as InternalCalculationType,
                 width,
             ) as CoordinateValue,
             y: div_round_closest(
-                top_right.y as InternalCalculationType
+                upper_right.y as InternalCalculationType
                     * CoordinateValue::MAX as InternalCalculationType,
                 height,
             ) as CoordinateValue,
@@ -474,7 +502,7 @@ impl HotspotBuilder<PercentageRepr> {
         };
 
         Hotspot {
-            top_right,
+            upper_right: upper_right,
             lower_left,
             _repr: core::marker::PhantomData,
         }
@@ -484,6 +512,9 @@ impl HotspotBuilder<PercentageRepr> {
 #[cfg(test)]
 mod tests {
     use super::*;
+
+    extern crate alloc;
+    use alloc::format;
 
     #[cfg(not(feature = "high_precision"))]
     #[test]
@@ -498,11 +529,11 @@ mod tests {
                 },
             );
 
-        assert_eq!(hotspot.top_right, Coordinate { x: 34367, y: 34367 });
+        assert_eq!(hotspot.upper_right, Coordinate { x: 34367, y: 34367 });
         assert_eq!(hotspot.lower_left, Coordinate { x: 655, y: 655 });
 
         assert_eq!(
-            hotspot.top_right(crate::ImageDimensions {
+            hotspot.upper_right(crate::ImageDimensions {
                 height: 5000,
                 width: 5000,
             }),
@@ -532,7 +563,7 @@ mod tests {
             );
 
         assert_eq!(
-            hotspot.top_right,
+            hotspot.upper_right,
             Coordinate {
                 x: 2252280849,
                 y: 2252280849
@@ -547,7 +578,7 @@ mod tests {
         );
 
         assert_eq!(
-            hotspot.top_right(crate::ImageDimensions {
+            hotspot.upper_right(crate::ImageDimensions {
                 height: 5000,
                 width: 5000,
             }),
@@ -652,22 +683,22 @@ mod tests {
         // Test when x1 == x2 and y1 == y2 (single point)
         let h1 = make_hotspot(5, 5, 5, 5);
         assert_eq!(h1.lower_left, Coordinate { x: 5, y: 5 });
-        assert_eq!(h1.top_right, Coordinate { x: 5, y: 5 });
+        assert_eq!(h1.upper_right, Coordinate { x: 5, y: 5 });
 
         // Test when x1 == x2 but y1 != y2 (vertical line)
         let h2 = make_hotspot(5, 0, 5, 10);
         assert_eq!(h2.lower_left, Coordinate { x: 5, y: 0 });
-        assert_eq!(h2.top_right, Coordinate { x: 5, y: 10 });
+        assert_eq!(h2.upper_right, Coordinate { x: 5, y: 10 });
 
         // Test when y1 == y2 but x1 != x2 (horizontal line)
         let h3 = make_hotspot(0, 5, 10, 5);
         assert_eq!(h3.lower_left, Coordinate { x: 0, y: 5 });
-        assert_eq!(h3.top_right, Coordinate { x: 10, y: 5 });
+        assert_eq!(h3.upper_right, Coordinate { x: 10, y: 5 });
 
         // Test with reversed coordinates (x2 < x1, y2 < y1)
         let h4 = make_hotspot(10, 10, 0, 0);
         assert_eq!(h4.lower_left, Coordinate { x: 0, y: 0 });
-        assert_eq!(h4.top_right, Coordinate { x: 10, y: 10 });
+        assert_eq!(h4.upper_right, Coordinate { x: 10, y: 10 });
     }
 
     #[test]
@@ -675,19 +706,19 @@ mod tests {
         // Test that the implementation uses strict < and > (not <= and >=)
         // by verifying behavior for all orderings including adjacent values
 
-        // When x1 < x2: lower_left should get x1, top_right should get x2
+        // When x1 < x2: lower_left should get x1, upper_right should get x2
         let h = make_hotspot(5, 7, 6, 8);
         assert_eq!(h.lower_left.x, 5);
         assert_eq!(h.lower_left.y, 7);
-        assert_eq!(h.top_right.x, 6);
-        assert_eq!(h.top_right.y, 8);
+        assert_eq!(h.upper_right.x, 6);
+        assert_eq!(h.upper_right.y, 8);
 
-        // When x1 > x2: lower_left should get x2, top_right should get x1
+        // When x1 > x2: lower_left should get x2, upper_right should get x1
         let h = make_hotspot(10, 20, 9, 19);
         assert_eq!(h.lower_left.x, 9);
         assert_eq!(h.lower_left.y, 19);
-        assert_eq!(h.top_right.x, 10);
-        assert_eq!(h.top_right.y, 20);
+        assert_eq!(h.upper_right.x, 10);
+        assert_eq!(h.upper_right.y, 20);
 
         // Test exhaustively with small values to cover all branches
         for x1 in 0u16..15 {
@@ -697,10 +728,10 @@ mod tests {
                 // Verify the correct value is in each position
                 if x1 < x2 {
                     assert_eq!(h.lower_left.x, x1 as CoordinateValue);
-                    assert_eq!(h.top_right.x, x2 as CoordinateValue);
+                    assert_eq!(h.upper_right.x, x2 as CoordinateValue);
                 } else {
                     assert_eq!(h.lower_left.x, x2 as CoordinateValue);
-                    assert_eq!(h.top_right.x, x1 as CoordinateValue);
+                    assert_eq!(h.upper_right.x, x1 as CoordinateValue);
                 }
             }
         }
@@ -712,10 +743,10 @@ mod tests {
 
                 if y1 < y2 {
                     assert_eq!(h.lower_left.y, y1 as CoordinateValue);
-                    assert_eq!(h.top_right.y, y2 as CoordinateValue);
+                    assert_eq!(h.upper_right.y, y2 as CoordinateValue);
                 } else {
                     assert_eq!(h.lower_left.y, y2 as CoordinateValue);
-                    assert_eq!(h.top_right.y, y1 as CoordinateValue);
+                    assert_eq!(h.upper_right.y, y1 as CoordinateValue);
                 }
             }
         }
@@ -762,6 +793,21 @@ mod tests {
         assert_eq!(h1.max_overlap(&h2), 0.5);
     }
 
+    #[test]
+    fn test_debug_impls() {
+        let pixel_builder = Hotspot::builder();
+        assert_eq!(
+            format!("{:?}", pixel_builder),
+            "HotspotBuilder { kind: \"Pixel Representation\" }"
+        );
+
+        let percentage_builder = Hotspot::builder().with_repr::<PercentageRepr>();
+        assert_eq!(
+            format!("{:?}", percentage_builder),
+            "HotspotBuilder { kind: \"Percentage Representation\" }"
+        );
+    }
+
     // Property-based tests (fuzzing)
     #[cfg(not(miri))]
     mod fuzz_tests {
@@ -795,8 +841,8 @@ mod tests {
                 let h = Hotspot::builder().from_pixels((c1, c2));
 
                 // Invariant: lower_left should have smaller or equal coordinates
-                prop_assert!(h.lower_left.x <= h.top_right.x);
-                prop_assert!(h.lower_left.y <= h.top_right.y);
+                prop_assert!(h.lower_left.x <= h.upper_right.x);
+                prop_assert!(h.lower_left.y <= h.upper_right.y);
 
                 // Test the exact branching logic for each coordinate
                 // For lower_left: should use the branch `if x1 < x2 { x1 } else { x2 }`
@@ -805,11 +851,11 @@ mod tests {
                 prop_assert_eq!(h.lower_left.x, expected_lower_x);
                 prop_assert_eq!(h.lower_left.y, expected_lower_y);
 
-                // For top_right: should use the branch `if x1 > x2 { x1 } else { x2 }`
+                // For upper_right: should use the branch `if x1 > x2 { x1 } else { x2 }`
                 let expected_top_x = if c1.x > c2.x { c1.x } else { c2.x };
                 let expected_top_y = if c1.y > c2.y { c1.y } else { c2.y };
-                prop_assert_eq!(h.top_right.x, expected_top_x);
-                prop_assert_eq!(h.top_right.y, expected_top_y);
+                prop_assert_eq!(h.upper_right.x, expected_top_x);
+                prop_assert_eq!(h.upper_right.y, expected_top_y);
             }
 
             #[test]
@@ -838,14 +884,14 @@ mod tests {
                 let combined = Hotspot::combine_hotspots(h1, h2);
 
                 // Check h1 is inside
-                prop_assert!(combined.top_right.x >= h1.top_right.x);
-                prop_assert!(combined.top_right.y >= h1.top_right.y);
+                prop_assert!(combined.upper_right.x >= h1.upper_right.x);
+                prop_assert!(combined.upper_right.y >= h1.upper_right.y);
                 prop_assert!(combined.lower_left.x <= h1.lower_left.x);
                 prop_assert!(combined.lower_left.y <= h1.lower_left.y);
 
                 // Check h2 is inside
-                prop_assert!(combined.top_right.x >= h2.top_right.x);
-                prop_assert!(combined.top_right.y >= h2.top_right.y);
+                prop_assert!(combined.upper_right.x >= h2.upper_right.x);
+                prop_assert!(combined.upper_right.y >= h2.upper_right.y);
                 prop_assert!(combined.lower_left.x <= h2.lower_left.x);
                 prop_assert!(combined.lower_left.y <= h2.lower_left.y);
             }
@@ -854,12 +900,12 @@ mod tests {
             fn fuzz_combine_hotspots_overlap_in(h1 in arb_hotspot(), h2 in arb_hotspot()) {
                 let combined = Hotspot::combine_hotspots(h1, h2);
 
-                let h1_area = (h1.top_right.x - h1.lower_left.x) as InternalCalculationType * (h1.top_right.y - h1.lower_left.y) as InternalCalculationType;
+                let h1_area = (h1.upper_right.x - h1.lower_left.x) as InternalCalculationType * (h1.upper_right.y - h1.lower_left.y) as InternalCalculationType;
                 if h1_area > 0 {
                     prop_assert!((h1.overlap_in(&combined) - 1.0).abs() < 1e-5);
                 }
 
-                let h2_area = (h2.top_right.x - h2.lower_left.x) as InternalCalculationType * (h2.top_right.y - h2.lower_left.y) as InternalCalculationType;
+                let h2_area = (h2.upper_right.x - h2.lower_left.x) as InternalCalculationType * (h2.upper_right.y - h2.lower_left.y) as InternalCalculationType;
                 if h2_area > 0 {
                     prop_assert!((h2.overlap_in(&combined) - 1.0).abs() < 1e-5);
                 }
@@ -877,8 +923,8 @@ mod tests {
                         y: h.lower_left.y % dims.height
                     },
                     Coordinate {
-                        x: h.top_right.x % dims.width,
-                        y: h.top_right.y % dims.height
+                        x: h.upper_right.x % dims.width,
+                        y: h.upper_right.y % dims.height
                     }
                 ));
 
@@ -891,8 +937,8 @@ mod tests {
 
                 let diff_x1 = if back.lower_left.x > h_constrained.lower_left.x { back.lower_left.x - h_constrained.lower_left.x } else { h_constrained.lower_left.x - back.lower_left.x };
                 let diff_y1 = if back.lower_left.y > h_constrained.lower_left.y { back.lower_left.y - h_constrained.lower_left.y } else { h_constrained.lower_left.y - back.lower_left.y };
-                let diff_x2 = if back.top_right.x > h_constrained.top_right.x { back.top_right.x - h_constrained.top_right.x } else { h_constrained.top_right.x - back.top_right.x };
-                let diff_y2 = if back.top_right.y > h_constrained.top_right.y { back.top_right.y - h_constrained.top_right.y } else { h_constrained.top_right.y - back.top_right.y };
+                let diff_x2 = if back.upper_right.x > h_constrained.upper_right.x { back.upper_right.x - h_constrained.upper_right.x } else { h_constrained.upper_right.x - back.upper_right.x };
+                let diff_y2 = if back.upper_right.y > h_constrained.upper_right.y { back.upper_right.y - h_constrained.upper_right.y } else { h_constrained.upper_right.y - back.upper_right.y };
 
                 prop_assert!(diff_x1 <= tolerance_x);
                 prop_assert!(diff_y1 <= tolerance_y);
