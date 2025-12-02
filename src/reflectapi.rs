@@ -3,7 +3,7 @@ extern crate alloc;
 use alloc::{collections::BTreeSet, string::String, vec};
 use reflectapi::{
     Field, Fields, Input, LanguageSpecificTypeCodegenConfig, Output, RustTypeCodegenConfig, Struct,
-    Type, TypeParameter, TypeReference, codegen::rust::Config,
+    Type, TypeParameter, TypeReference,
 };
 
 // TODO: don't have the `codegen` feature enabled by default.
@@ -165,6 +165,7 @@ impl<R> Output for Hotspot<R> {
 #[cfg(test)]
 mod tests {
     use crate::repr::PixelRepr;
+    use reflectapi::codegen::rust::Config;
 
     use super::*;
 
