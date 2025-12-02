@@ -1,0 +1,123 @@
+---
+source: tests/reflectapi_integration.rs
+expression: spec_json
+---
+{
+  "openapi": "3.1.0",
+  "info": {
+    "title": "Hotspots Test API",
+    "description": "Test API for validating reflectapi serialization",
+    "version": "1.0.0"
+  },
+  "paths": {
+    "/echo_coordinate": {
+      "description": "Echoes back the provided coordinate",
+      "post": {
+        "operationId": "echo_coordinate",
+        "description": "Echoes back the provided coordinate",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "description": "Tuple holding 2 elements",
+                "type": "array",
+                "prefixItems": [
+                  {
+                    "$ref": "#/components/schemas/u16"
+                  },
+                  {
+                    "$ref": "#/components/schemas/u16"
+                  }
+                ]
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "200 OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "description": "Tuple holding 2 elements",
+                  "type": "array",
+                  "prefixItems": [
+                    {
+                      "$ref": "#/components/schemas/u16"
+                    },
+                    {
+                      "$ref": "#/components/schemas/u16"
+                    }
+                  ]
+                }
+              }
+            }
+          }
+        }
+      }
+    },
+    "/echo_hotspot": {
+      "description": "Echoes back the provided hotspot",
+      "post": {
+        "operationId": "echo_hotspot",
+        "description": "Echoes back the provided hotspot",
+        "requestBody": {
+          "content": {
+            "application/json": {
+              "schema": {
+                "$ref": "#/components/schemas/Hotspot"
+              }
+            }
+          },
+          "required": true
+        },
+        "responses": {
+          "200": {
+            "description": "200 OK",
+            "content": {
+              "application/json": {
+                "schema": {
+                  "$ref": "#/components/schemas/Hotspot"
+                }
+              }
+            }
+          }
+        }
+      }
+    }
+  },
+  "components": {
+    "schemas": {
+      "Hotspot": {
+        "description": "A rectangular hotspot represented as a rectangle with two corners.",
+        "type": "object",
+        "title": "Hotspot",
+        "required": [
+          "x1",
+          "x2",
+          "y1",
+          "y2"
+        ],
+        "properties": {
+          "x1": {
+            "$ref": "#/components/schemas/u16"
+          },
+          "x2": {
+            "$ref": "#/components/schemas/u16"
+          },
+          "y1": {
+            "$ref": "#/components/schemas/u16"
+          },
+          "y2": {
+            "$ref": "#/components/schemas/u16"
+          }
+        }
+      },
+      "u16": {
+        "description": "16-bit unsigned integer",
+        "type": "integer"
+      }
+    }
+  }
+}

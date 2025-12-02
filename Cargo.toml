@@ -28,8 +28,14 @@ reflectapi = ["dep:reflectapi", "serde"]
 [dev-dependencies]
 insta = { version = "1.18.0-alpha.1", features = ["json"]}
 proptest = "1.9.0"
-reflectapi = { version = "0.16", features = ["builder", "codegen"] }
+reflectapi = { version = "0.16", features = ["builder", "codegen", "axum", "rt"] }
 serde_json = { version = "1" }
+tokio = { version = "1", features = ["macros", "rt-multi-thread", "time"] }
+axum = { version = "0.8" }
+reqwest = { version = "0.12", features = ["json"] }
+http = { version = "1" }
+bytes = { version = "1" }
+regex = { version = "1" }
 
 # Insta recommends compiling with optimizations It takes longer on initial compile, but makes test
 # runs faster. https://insta.rs/docs/quickstart/
