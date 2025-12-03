@@ -20,7 +20,7 @@ env:
 jobs:
   cargo-lint:
     runs-on: ubuntu-latest
-    timeout-minutes: 10
+    timeout-minutes: 20
     concurrency:
       group: toml-${{ github.repository }}-${{ github.ref }}
       cancel-in-progress: true
