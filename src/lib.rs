@@ -2,10 +2,7 @@
 #![no_std]
 
 // ## TODO
-// - Test exported interface.
-// - Consider providing fully safe interface.
 // - Introduce utilites to make conversions between different origins easier.
-// - Introduce utilties to make converting from a single point into a hotspot easy, including providing a str length.
 // - Make the repr module almost fully internal and provide simple exported types - similar to the MPN crate.
 
 pub mod repr;
@@ -172,45 +169,117 @@ impl Hotspot<PercentageRepr> {
     }
 }
 
-macro_rules! impl_corner {
-    ($func:ident, $name:literal) => {
-        impl Hotspot<PercentageRepr> {
-            #[doc = concat!("Get the ", $name, " coordinate in pixel values, given the image dimensions.")]
-            ///
-            /// This will take the internal percentage and multiply it against the
-            /// height and width of the image to produce exact coordinates.
-            ///
-            /// Note that we will round to the closest pixel automatically.
-            #[inline]
-            pub const fn $func(
-                &self,
-                ImageDimensions { height, width }: ImageDimensions,
-            ) -> Coordinate {
-                // Exact the exact values as integers
-                let Coordinate { x, y } = Hotspot::<PixelRepr>::$func(unsafe {
-                    core::mem::transmute::<&Hotspot<PercentageRepr>, &Hotspot<PixelRepr>>(self)
-                });
+impl Hotspot<PercentageRepr> {
+    /// Get the upper-right coordinate in pixel values, given the image dimensions.
+    ///
+    /// This will take the internal percentage and multiply it against the
+    /// height and width of the image to produce exact coordinates.
+    ///
+    /// Note that we will round to the closest pixel automatically.
+    #[inline]
+    pub const fn upper_right(
+        &self,
+        ImageDimensions { height, width }: ImageDimensions,
+    ) -> Coordinate {
+        let Coordinate { x, y } = self.upper_right;
 
-                let x: CoordinateValue = div_round_closest(
-                    x as InternalCalculationType * width as InternalCalculationType,
-                    CoordinateValue::MAX as InternalCalculationType,
-                ) as CoordinateValue;
+        let x: CoordinateValue = div_round_closest(
+            x as InternalCalculationType * width as InternalCalculationType,
+            CoordinateValue::MAX as InternalCalculationType,
+        ) as CoordinateValue;
 
-                let y: CoordinateValue = div_round_closest(
-                    y as InternalCalculationType * height as InternalCalculationType,
-                    CoordinateValue::MAX as InternalCalculationType,
-                ) as CoordinateValue;
+        let y: CoordinateValue = div_round_closest(
+            y as InternalCalculationType * height as InternalCalculationType,
+            CoordinateValue::MAX as InternalCalculationType,
+        ) as CoordinateValue;
 
-                Coordinate { x, y }
-            }
-        }
-    };
+        Coordinate { x, y }
+    }
+
+    /// Get the upper-left coordinate in pixel values, given the image dimensions.
+    ///
+    /// This will take the internal percentage and multiply it against the
+    /// height and width of the image to produce exact coordinates.
+    ///
+    /// Note that we will round to the closest pixel automatically.
+    #[inline]
+    pub const fn upper_left(
+        &self,
+        ImageDimensions { height, width }: ImageDimensions,
+    ) -> Coordinate {
+        let Coordinate { x, y } = Coordinate {
+            x: self.upper_right.x,
+            y: self.lower_left.y,
+        };
+
+        let x: CoordinateValue = div_round_closest(
+            x as InternalCalculationType * width as InternalCalculationType,
+            CoordinateValue::MAX as InternalCalculationType,
+        ) as CoordinateValue;
+
+        let y: CoordinateValue = div_round_closest(
+            y as InternalCalculationType * height as InternalCalculationType,
+            CoordinateValue::MAX as InternalCalculationType,
+        ) as CoordinateValue;
+
+        Coordinate { x, y }
+    }
+
+    /// Get the lower-left coordinate in pixel values, given the image dimensions.
+    ///
+    /// This will take the internal percentage and multiply it against the
+    /// height and width of the image to produce exact coordinates.
+    ///
+    /// Note that we will round to the closest pixel automatically.
+    #[inline]
+    pub const fn lower_left(
+        &self,
+        ImageDimensions { height, width }: ImageDimensions,
+    ) -> Coordinate {
+        let Coordinate { x, y } = self.lower_left;
+
+        let x: CoordinateValue = div_round_closest(
+            x as InternalCalculationType * width as InternalCalculationType,
+            CoordinateValue::MAX as InternalCalculationType,
+        ) as CoordinateValue;
+
+        let y: CoordinateValue = div_round_closest(
+            y as InternalCalculationType * height as InternalCalculationType,
+            CoordinateValue::MAX as InternalCalculationType,
+        ) as CoordinateValue;
+
+        Coordinate { x, y }
+    }
+
+    /// Get the lower-right coordinate in pixel values, given the image dimensions.
+    ///
+    /// This will take the internal percentage and multiply it against the
+    /// height and width of the image to produce exact coordinates.
+    ///
+    /// Note that we will round to the closest pixel automatically.
+    #[inline]
+    pub const fn lower_right(
+        &self,
+        ImageDimensions { height, width }: ImageDimensions,
+    ) -> Coordinate {
+        let Coordinate { x, y } = Coordinate {
+            x: self.lower_left.x,
+            y: self.upper_right.y,
+        };
+
+        let x: CoordinateValue = div_round_closest(
+            x as InternalCalculationType * width as InternalCalculationType,
+            CoordinateValue::MAX as InternalCalculationType,
+        ) as CoordinateValue;
+
+        let y: CoordinateValue = div_round_closest(
+            y as InternalCalculationType * height as InternalCalculationType,
+            CoordinateValue::MAX as InternalCalculationType,
+        ) as CoordinateValue;
+
+        Coordinate { x, y }
+    }
 }
-
-impl_corner!(upper_right, "upper-right");
-impl_corner!(upper_left, "upper-left");
-impl_corner!(lower_left, "lower-left");
-impl_corner!(lower_right, "lower-right");
 
 impl<R> Hotspot<R> {
     /// Calculate the overlap between two hotspots as a value between 0 and 1
@@ -246,36 +315,11 @@ impl<R> Hotspot<R> {
         let yb1 = yb1 as InternalCalculationType;
         let yb2 = yb2 as InternalCalculationType;
 
-        // Should always be true, but just in case.
-        #[allow(
-            clippy::absurd_extreme_comparisons,
-            reason = "These types change based on features, this helps to reduce brittleness."
-        )]
-        {
-            debug_assert!(
-                CoordinateValue::MAX as InternalCalculationType
-                    * CoordinateValue::MAX as InternalCalculationType
-                    <= InternalCalculationType::MAX
-            );
-        }
-        debug_assert!(
-            core::mem::size_of::<InternalCalculationType>()
-                > core::mem::size_of::<CoordinateValue>()
-        );
-
         // Calculate area of rectangle A
-        debug_assert!(xa2 >= xa1);
-        debug_assert!(ya2 >= ya1);
-        // SAFETY: We guarantee that x2 will be > x1 and y2 will be > y1 in the constructor so we can use unchecked_sub here.
-        // Because the input types can be at most u16::MAX and our output type is a u32 the mul will always be safe too and so can become a unchecked_mul.
-        let sa = unsafe { xa2.unchecked_sub(xa1).unchecked_mul(ya2.unchecked_sub(ya1)) };
+        let sa = (xa2 - xa1) * (ya2 - ya1);
 
         // Calculate area of rectangle B
-        debug_assert!(xb2 >= xb1);
-        debug_assert!(yb2 >= yb1);
-        // SAFETY: We guarantee that x2 will be > x1 and y2 will be > y1 in the constructor so we can use unchecked_sub here.
-        // Because the input types can be at most u16::MAX and our output type is a u32 the mul will always be safe too and so can become a unchecked_mul.
-        let sb = unsafe { xb2.unchecked_sub(xb1).unchecked_mul(yb2.unchecked_sub(yb1)) };
+        let sb = (xb2 - xb1) * (yb2 - yb1);
 
         // Calculate intersection dimensions
         // We use saturating_sub because if the rectangles are disjoint,
@@ -284,9 +328,7 @@ impl<R> Hotspot<R> {
         let intersection_h = min!(ya2, yb2).saturating_sub(max!(ya1, yb1));
 
         // Calculate area of intersection
-        // SAFETY: The maximum overlap between two rectangles that were defined with u16 values is u16::MAX*u16::MAX
-        // therefore we cannot overflow the U32 here.
-        let si = unsafe { intersection_w.unchecked_mul(intersection_h) };
+        let si = intersection_w * intersection_h;
 
         // Calculate area of union
         // We subtract the intersection from the sum of the two areas.
@@ -334,11 +376,7 @@ impl<R> Hotspot<R> {
         let yb2 = yb2 as InternalCalculationType;
 
         // Calculate area of rectangle A (self)
-        debug_assert!(xa2 >= xa1);
-        debug_assert!(ya2 >= ya1);
-        // SAFETY: We guarantee that x2 will be > x1 and y2 will be > y1 in the constructor so we can use unchecked_sub here.
-        // Because the input types can be at most u16::MAX and our output type is a u32 the mul will always be safe too and so can become a unchecked_mul.
-        let sa = unsafe { xa2.unchecked_sub(xa1).unchecked_mul(ya2.unchecked_sub(ya1)) };
+        let sa = (xa2 - xa1) * (ya2 - ya1);
 
         // Calculate intersection dimensions
         // We use saturating_sub because if the rectangles are disjoint,
@@ -347,9 +385,7 @@ impl<R> Hotspot<R> {
         let intersection_h = min!(ya2, yb2).saturating_sub(max!(ya1, yb1));
 
         // Calculate area of intersection
-        // SAFETY: The maximum overlap between two rectangles that were defined with u16 values is u16::MAX*u16::MAX
-        // therefore we cannot overflow the U32 here.
-        let si = unsafe { intersection_w.unchecked_mul(intersection_h) };
+        let si = intersection_w * intersection_h;
 
         // Handle zero area self to avoid NaN
         if sa == 0 {
@@ -546,6 +582,22 @@ mod tests {
             }),
             Coordinate { x: 50, y: 5244 }
         );
+
+        assert_eq!(
+            hotspot.upper_left(crate::ImageDimensions {
+                height: 5000,
+                width: 5000,
+            }),
+            Coordinate { x: 2622, y: 50 }
+        );
+
+        assert_eq!(
+            hotspot.upper_right(crate::ImageDimensions {
+                height: 10000,
+                width: 5000,
+            }),
+            Coordinate { x: 2622, y: 5244 }
+        );
     }
 
     #[cfg(feature = "high_precision")]
@@ -590,6 +642,22 @@ mod tests {
                 width: 5000,
             }),
             Coordinate { x: 50, y: 5244 }
+        );
+
+        assert_eq!(
+            hotspot.upper_left(crate::ImageDimensions {
+                height: 5000,
+                width: 5000,
+            }),
+            Coordinate { x: 2622, y: 50 }
+        );
+
+        assert_eq!(
+            hotspot.upper_right(crate::ImageDimensions {
+                height: 10000,
+                width: 5000,
+            }),
+            Coordinate { x: 2622, y: 5244 }
         );
     }
 

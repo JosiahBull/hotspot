@@ -19,6 +19,8 @@ env:
   RUST_BACKTRACE: short
   RUSTUP_MAX_RETRIES: 10
   CARGO_MUTANTS_MINIMUM_TEST_TIMEOUT: 60
+  RUSTFLAGS: "-D warnings"
+  RUSTDOCFLAGS: "-D warnings"
 
 jobs:
   build:
@@ -38,7 +40,7 @@ jobs:
       - uses: dtolnay/rust-toolchain@master
         with:
           toolchain: stable
-          components: rustfmt, clippy
+          components: rustfmt, clippy, rust-docs
 
       - uses: Swatinem/rust-cache@v2
         with:
@@ -61,6 +63,10 @@ jobs:
       - name: Clippy
         if: matrix.os == 'ubuntu-latest'
         run: cargo clippy --all-targets --all-features -- -D warnings
+
+      - name: Try building the docs
+        if: matrix.os == 'ubuntu-latest'
+        run: cargo doc
 
       - name: Check semver
         if: matrix.os == 'ubuntu-latest'

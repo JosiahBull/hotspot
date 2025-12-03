@@ -2,8 +2,6 @@
 //!
 //! Manually implemented to avoid calling the serde proc macros which tend to be quite slow at compile time.
 
-use core::mem::MaybeUninit;
-
 use serde::{
     Deserialize,
     de::{self, Visitor},
@@ -11,39 +9,6 @@ use serde::{
 };
 
 use crate::{Coordinate, CoordinateValue, Hotspot, ImageDimensions, repr::HotspotRepr};
-
-macro_rules! deserialize_field {
-    ($map:expr, $flags:expr, $field:expr, $flag_bit:expr, $field_name:literal) => {{
-        if $flags & $flag_bit != 0 {
-            return Err(de::Error::duplicate_field($field_name));
-        }
-        $field.write($map.next_value()?);
-        $flags |= $flag_bit;
-    }};
-}
-
-macro_rules! extract_field {
-    ($flags:expr, $field:expr, $flag_bit:expr, $field_name:literal) => {{
-        if $flags & $flag_bit != 0 {
-            // Safety check: In debug builds, verify we actually wrote to this field
-            debug_assert!(
-                {
-                    // This is safe because we're only reading for the assertion
-                    let ptr = $field.as_ptr();
-                    !ptr.is_null()
-                },
-                "Field '{}' flag was set but memory appears uninitialized",
-                $field_name
-            );
-
-            // SAFETY: We verified via the flag bit that this field was initialized
-            // via MaybeUninit::write() in the deserialize_field! macro above
-            unsafe { $field.assume_init() }
-        } else {
-            return Err(de::Error::missing_field($field_name));
-        }
-    }};
-}
 
 impl serde::Serialize for ImageDimensions {
     fn serialize<S>(&self, serializer: S) -> Result<S::Ok, S::Error>
@@ -241,33 +206,46 @@ impl<'de, R: HotspotRepr> serde::Deserialize<'de> for Hotspot<R> {
             where
                 A: de::MapAccess<'de>,
             {
-                let mut x1 = MaybeUninit::<CoordinateValue>::uninit();
-                let mut y1 = MaybeUninit::<CoordinateValue>::uninit();
-                let mut x2 = MaybeUninit::<CoordinateValue>::uninit();
-                let mut y2 = MaybeUninit::<CoordinateValue>::uninit();
-
-                // Bitflags to track which fields have been initialized
-                let mut flags: u8 = 0;
-                const X1_SET: u8 = 1 << 0;
-                const Y1_SET: u8 = 1 << 1;
-                const X2_SET: u8 = 1 << 2;
-                const Y2_SET: u8 = 1 << 3;
+                let mut x1: Option<CoordinateValue> = None;
+                let mut y1: Option<CoordinateValue> = None;
+                let mut x2: Option<CoordinateValue> = None;
+                let mut y2: Option<CoordinateValue> = None;
 
                 // Parse all fields from the map
                 while let Some(key) = map.next_key()? {
                     match key {
-                        Field::X1 => deserialize_field!(map, flags, x1, X1_SET, "x1"),
-                        Field::Y1 => deserialize_field!(map, flags, y1, Y1_SET, "y1"),
-                        Field::X2 => deserialize_field!(map, flags, x2, X2_SET, "x2"),
-                        Field::Y2 => deserialize_field!(map, flags, y2, Y2_SET, "y2"),
+                        Field::X1 => {
+                            if x1.is_some() {
+                                return Err(de::Error::duplicate_field("x1"));
+                            }
+                            x1 = Some(map.next_value()?);
+                        }
+                        Field::Y1 => {
+                            if y1.is_some() {
+                                return Err(de::Error::duplicate_field("y1"));
+                            }
+                            y1 = Some(map.next_value()?);
+                        }
+                        Field::X2 => {
+                            if x2.is_some() {
+                                return Err(de::Error::duplicate_field("x2"));
+                            }
+                            x2 = Some(map.next_value()?);
+                        }
+                        Field::Y2 => {
+                            if y2.is_some() {
+                                return Err(de::Error::duplicate_field("y2"));
+                            }
+                            y2 = Some(map.next_value()?);
+                        }
                     }
                 }
 
                 // Extract all fields, returning errors for any missing fields
-                let x1 = extract_field!(flags, x1, X1_SET, "x1");
-                let y1 = extract_field!(flags, y1, Y1_SET, "y1");
-                let x2 = extract_field!(flags, x2, X2_SET, "x2");
-                let y2 = extract_field!(flags, y2, Y2_SET, "y2");
+                let x1 = x1.ok_or_else(|| de::Error::missing_field("x1"))?;
+                let y1 = y1.ok_or_else(|| de::Error::missing_field("y1"))?;
+                let x2 = x2.ok_or_else(|| de::Error::missing_field("x2"))?;
+                let y2 = y2.ok_or_else(|| de::Error::missing_field("y2"))?;
 
                 Ok(HotspotFields { x1, y1, x2, y2 })
             }

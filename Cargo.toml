@@ -1,6 +1,6 @@
 [package]
 name = "hotspots"
-version = "0.1.0"
+version = "0.2.0"
 edition = "2024"
 authors = ["Josiah Bull <josiah.bull7@gmail.com>"]
 description = "A lightweight Rust library for working with 2D rectangular hotspots with support for pixel and percentage-based coordinates"
@@ -55,6 +55,9 @@ transmute_ptr_to_ptr = "deny"
 unchecked_duration_subtraction = "deny"
 unsafe_derive_deserialize = "deny"
 as_underscore = "deny"
+
+[workspace.lints.rust]
+unsafe_code = "forbid"
 arithmetic_side_effects = "deny"
 cast_lossless = "deny"
 checked_conversions = "deny"
