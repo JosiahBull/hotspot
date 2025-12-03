@@ -7,6 +7,7 @@ description = "A lightweight Rust library for working with 2D rectangular hotspo
 readme = "README.md"
 homepage = "https://github.com/josiahbull/hotspots"
 repository = "https://github.com/josiahbull/hotspots"
+documentation = "https://docs.rs/hotspots"
 license = "MIT OR Apache-2.0"
 keywords = ["hotspot", "coordinates", "rectangle", "geometry", "2d"]
 categories = ["algorithms", "graphics", "data-structures"]
